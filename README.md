@@ -66,19 +66,58 @@ You talk to one agent. It dispatches to a team. The team works in visible rooms.
 
 ## Status
 
-🟢 **v0.1 — Basic chat works.** (2026-04-02)
+🟢 **v0.2.0 — Multi-agent chat** (2026-04-02)
 
-- Single room (`#product`) with one agent (Kagura)
-- Send messages, receive agent replies
-- Messages persisted in SQLite
-- Session visible in OpenClaw Control UI
+- Multiple agents per room (Kagura, Anan, Ruantang)
+- `requireMention` routing — agents only respond when @mentioned, or see everything
+- @mention autocomplete (type `@` to pick agents)
+- Typing indicator ("Kagura is typing...")
+- Message history on reconnect
+- SQLite persistence
+- Process supervisor with auto-restart
 
 ### What's next
-- [ ] Streaming responses (show text as agent types)
-- [ ] UI polish (avatars, timestamps, markdown rendering)
-- [ ] Multiple rooms
-- [ ] Multiple agents per room
-- [ ] Auto-reconnect on server restart
+- [ ] @mention highlight in messages (#4)
+- [ ] WebSocket auto-reconnect (#5)
+- [ ] UI polish (avatars, markdown rendering)
+- [ ] Task lifecycle (created → assigned → done)
+
+## Quick Start
+
+```bash
+git clone https://github.com/kagura-agent/workshop.git
+cd workshop
+
+# Install dependencies
+cd server && npm install && npx tsc && cd ..
+cd web && npm install && cd ..
+
+# Configure (edit gateway URL and token)
+cp workshop.json.example workshop.json
+vim workshop.json
+
+# Start everything (with auto-restart)
+./scripts/supervise.sh
+```
+
+Open `http://localhost:5173` in your browser.
+
+### ⚠️ For developers: always use `setsid` or the supervisor
+
+If starting services manually (not via `supervise.sh`), **always use `setsid`**:
+
+```bash
+# ✅ Correct — process survives exec session cleanup
+cd server && setsid node dist/index.js > /tmp/workshop-server.log 2>&1 &
+cd web && setsid npx vite --host 0.0.0.0 > /tmp/workshop-web.log 2>&1 &
+
+# ❌ Wrong — process dies when exec session is cleaned up
+cd server && node dist/index.js &
+cd web && npx vite &
+# disown does NOT help — process stays in same PGID
+```
+
+**Why?** Kagura manages Workshop via OpenClaw's `exec` tool. Exec sessions have lifecycle management — when cleaned up, the entire process group (PGID) is killed. `setsid` creates a new PGID, decoupling the service from the exec session.
 
 ## Origin
 
