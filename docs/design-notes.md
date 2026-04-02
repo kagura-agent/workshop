@@ -35,9 +35,9 @@
 
 ## Open Questions
 
-- [ ] Should Workshop be an OpenClaw plugin, a standalone service, or a layer on top?
+- [x] Should Workshop be an OpenClaw plugin, a standalone service, or a layer on top? **Standalone service. Connects via Gateway WS API as a TUI-class client. Plugin integration possible later for deeper hooks.**
 - [ ] How to handle agent identity across platforms? (Same agent, different bot tokens per platform)
-- [ ] Task persistence — where does task state live? (File, SQLite, Redis?)
+- [x] Task persistence — where does task state live? **SQLite for rooms/messages. Session state lives in OpenClaw's session system.**
 - [ ] How much orchestration logic should live in the "leader" agent vs Workshop core?
 - [ ] Can we reuse OpenClaw's `sessions_send` for cross-session messaging, or need something new?
 

@@ -146,7 +146,7 @@ interface Message {
 
 ## Open Questions
 
-- [ ] One gateway per agent, or can one gateway serve multiple agent identities?
-- [ ] Message routing: broadcast to all agents in room, or always @-addressed?
-- [ ] SQLite vs in-memory for MVP? (SQLite is simple and persistent)
-- [ ] How to handle agent streaming responses in the multi-agent chat view?
+- [x] One gateway per agent, or can one gateway serve multiple agent identities? **One gateway per agent for MVP. Each agent = separate OpenClaw instance.**
+- [x] Message routing: broadcast to all agents in room, or always @-addressed? **Broadcast to all agents in room. @-mention routing is future work.**
+- [x] SQLite vs in-memory for MVP? **SQLite. Simple, persistent, works fine.** DB auto-created at `server/workshop.db`.
+- [ ] How to handle agent streaming responses in the multi-agent chat view? **Currently showing final only. Delta streaming is next.**

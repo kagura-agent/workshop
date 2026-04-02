@@ -83,7 +83,9 @@ export class GatewayConnection {
     const sessionKey = roomId ? `workshop:${roomId}` : 'main';
 
     // Track this session key so we only process events from our own sessions
+    // Gateway prefixes with "agent:{agentId}:" internally
     this.ownSessionKeys.add(sessionKey);
+    this.ownSessionKeys.add(`agent:${this.agent.id}:${sessionKey}`);
 
     const frame = {
       type: 'req',
@@ -104,6 +106,7 @@ export class GatewayConnection {
     });
 
     this.ws.send(JSON.stringify(frame));
+    console.log(`[gateway] → chat.send to ${this.agent.name} session=${sessionKey}: "${content.slice(0, 80)}"`);
   }
 
   disconnect(): void {
@@ -146,20 +149,31 @@ export class GatewayConnection {
   private handleEvent(frame: any): void {
     const { event, payload } = frame;
 
+    // Debug: log chat/agent events with session info
+    if (event === 'chat') {
+      const sk = payload?.sessionKey ?? 'none';
+      console.log(`[gateway] ← chat state=${payload?.state} session=${sk}`);
+    }
+
     switch (event) {
       case 'connect.challenge':
         this.handleChallenge(payload);
         break;
 
       case 'chat': {
-        // Chat events: { runId, sessionKey, seq, state, message?, errorMessage? }
-        // Only process events from sessions Workshop created — ignore Feishu/Discord/etc
-        const eventSessionKey = payload?.sessionKey;
-        if (eventSessionKey && !this.ownSessionKeys.has(eventSessionKey)) {
-          // Event from another session (Feishu, Discord, etc.) — skip
+        // Chat events from gateway (TUI/Control UI format): { runId, sessionKey, state, message }
+        const chatSessionKey = payload?.sessionKey;
+        if (chatSessionKey && !this.ownSessionKeys.has(chatSessionKey)) {
           break;
         }
+        console.log(`[gateway] ← chat event: state=${payload?.state} session=${chatSessionKey}`);
         this.handleChatEvent(payload);
+        break;
+      }
+
+      case 'agent': {
+        // Agent events (broadcast format) — skip text processing to avoid duplicates
+        // (chat events already handle the response)
         break;
       }
 
@@ -174,6 +188,10 @@ export class GatewayConnection {
     }
   }
 
+  /**
+   * Handle chat events (TUI/Control UI format).
+   * Format: { runId, sessionKey, state: "delta"|"final"|"error", message: { role, content, timestamp } }
+   */
   private handleChatEvent(payload: any): void {
     if (!payload) return;
 
@@ -181,37 +199,63 @@ export class GatewayConnection {
 
     switch (state) {
       case 'delta': {
-        // Streaming delta — payload.message has the partial content
+        // Streaming delta
         const message = payload.message;
-        if (message) {
-          const text = this.extractTextFromMessage(message);
-          if (text) {
-            this.onMessage?.(this.agent.id, text);
-          }
+        const text = this.extractChatText(message);
+        if (text) {
+          console.log(`[gateway] ← chat delta from ${this.agent.name}: "${text.slice(0, 80)}${text.length > 80 ? '...' : ''}"`);
+          // Don't emit deltas as messages yet - wait for final
         }
         break;
       }
 
       case 'final': {
-        // Complete message from agent
         const message = payload.message;
-        if (message) {
-          const text = this.extractTextFromMessage(message);
-          if (text) {
+        const text = this.extractChatText(message);
+        if (text) {
+          console.log(`[gateway] ← chat final from ${this.agent.name}: "${text.slice(0, 120)}${text.length > 120 ? '...' : ''}"`);
+          this.onMessage?.(this.agent.id, text);
+        }
+        break;
+      }
+
+      case 'error': {
+        console.error(`[gateway] ${this.agent.name} chat error:`, payload.errorMessage ?? 'Unknown');
+        break;
+      }
+
+      default:
+        console.log(`[gateway] ← chat state=${state} from ${this.agent.name}`);
+        break;
+    }
+  }
+
+  /**
+   * Handle agent events (broadcast format).
+   * Format: { runId, sessionKey, stream: "assistant"|"lifecycle"|"tool", data: { text, delta, phase, ... } }
+   */
+  private handleAgentEvent(payload: any): void {
+    if (!payload) return;
+
+    const stream = payload.stream;
+    const data = payload.data;
+
+    switch (stream) {
+      case 'assistant': {
+        const text = data?.text;
+        if (text && typeof text === 'string') {
+          const isDelta = data?.delta === true;
+          if (!isDelta) {
+            console.log(`[gateway] ← agent final from ${this.agent.name}: "${text.slice(0, 120)}${text.length > 120 ? '...' : ''}"`);
             this.onMessage?.(this.agent.id, text);
           }
         }
         break;
       }
 
-      case 'error': {
-        const errorMessage = payload.errorMessage ?? 'Unknown error';
-        console.error(`[gateway] ${this.agent.name} chat error:`, errorMessage);
-        break;
-      }
-
-      case 'aborted': {
-        console.log(`[gateway] ${this.agent.name} chat aborted`);
+      case 'lifecycle': {
+        const phase = data?.phase;
+        console.log(`[gateway] ← lifecycle from ${this.agent.name}: phase=${phase}`);
         break;
       }
 
@@ -221,30 +265,18 @@ export class GatewayConnection {
   }
 
   /**
-   * Extract plain text from a transcript message object.
-   * The message can have content as a string or as an array of content blocks.
+   * Extract plain text from a chat message object.
    */
-  private extractTextFromMessage(message: any): string {
+  private extractChatText(message: any): string {
     if (!message) return '';
-
-    // If message has a text field, prefer it
-    if (typeof message.text === 'string') {
-      return message.text;
-    }
-
-    // If content is a string
-    if (typeof message.content === 'string') {
-      return message.content;
-    }
-
-    // If content is an array of blocks
+    if (typeof message.text === 'string') return message.text;
+    if (typeof message.content === 'string') return message.content;
     if (Array.isArray(message.content)) {
       return message.content
-        .filter((block: any) => block?.type === 'text' && typeof block.text === 'string')
-        .map((block: any) => block.text)
+        .filter((b: any) => b?.type === 'text' && typeof b.text === 'string')
+        .map((b: any) => b.text)
         .join('');
     }
-
     return '';
   }
 
@@ -261,11 +293,11 @@ export class GatewayConnection {
         minProtocol: 3,
         maxProtocol: 3,
         client: {
-          id: 'cli',
+          id: 'openclaw-tui',
           displayName: 'Workshop',
           version: '0.1.0',
           platform: 'linux',
-          mode: 'backend',
+          mode: 'ui',
         },
         caps: [],
         auth: {

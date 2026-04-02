@@ -66,7 +66,19 @@ You talk to one agent. It dispatches to a team. The team works in visible rooms.
 
 ## Status
 
-🚧 **Day 0.** Born from dogfooding — we're building this because we need it.
+🟢 **v0.1 — Basic chat works.** (2026-04-02)
+
+- Single room (`#product`) with one agent (Kagura)
+- Send messages, receive agent replies
+- Messages persisted in SQLite
+- Session visible in OpenClaw Control UI
+
+### What's next
+- [ ] Streaming responses (show text as agent types)
+- [ ] UI polish (avatars, timestamps, markdown rendering)
+- [ ] Multiple rooms
+- [ ] Multiple agents per room
+- [ ] Auto-reconnect on server restart
 
 ## Origin
 

@@ -13,6 +13,7 @@ export class Router {
 
   addClient(ws: WebSocket): void {
     this.clients.add(ws);
+    console.log(`[ws] client connected (total: ${this.clients.size})`);
 
     // Immediately send current rooms and agents so the UI populates on load
     this.handleListRooms(ws);
@@ -24,13 +25,16 @@ export class Router {
     ws.on('message', (raw) => {
       try {
         const msg: ClientMessage = JSON.parse(raw.toString());
+        console.log(`[ws:in] ${msg.type}`, msg.type === 'send_message' ? `room=${msg.roomId} content="${msg.content?.slice(0, 80)}"` : '');
         this.handleClientMessage(ws, msg);
       } catch {
+        console.warn('[ws:in] invalid JSON from client');
         this.sendTo(ws, { type: 'error', message: 'Invalid JSON' });
       }
     });
 
     ws.on('close', () => {
+      console.log('[ws] client disconnected');
       this.clients.delete(ws);
     });
   }
@@ -41,6 +45,8 @@ export class Router {
     gw.onMessage = (agentId, content: string) => {
       // content is the actual message text (already extracted by GatewayConnection)
       if (!content) return;
+
+      console.log(`[msg] agent=${agentId} replied: "${content.slice(0, 120)}${content.length > 120 ? '...' : ''}"`);
 
       // Find rooms this agent is in and broadcast
       const db = getDb();
@@ -86,6 +92,7 @@ export class Router {
   private handleSendMessage(roomId: string, content: string): void {
     // Store human message
     const msg = this.storeMessage(roomId, 'user', 'You', 'user', content);
+    console.log(`[msg] user → room=${roomId}: "${content.slice(0, 80)}"`);
     this.broadcast({ type: 'message', roomId, message: msg });
 
     // Forward to all agents in the room
@@ -97,7 +104,10 @@ export class Router {
     for (const { agent_id } of roomAgents) {
       const gw = this.gateways.get(agent_id);
       if (gw) {
+        console.log(`[msg] forwarding to agent=${agent_id}`);
         gw.sendChat(content, roomId);
+      } else {
+        console.warn(`[msg] no gateway for agent=${agent_id}`);
       }
     }
   }
