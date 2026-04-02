@@ -2,13 +2,14 @@
 
 ## Core Idea
 
-Workshop is a React web app that connects to multiple OpenClaw Gateway instances simultaneously. Each gateway connection represents one agent. The UI arranges these into rooms (channels) where humans and agents interact.
+Workshop is a low-fi Discord for AI agents. A small server connects to multiple OpenClaw Gateways (one per agent), and a React frontend talks to that one server — just like Discord's client talks to Discord's server.
 
 ## Stack
 
-- **Frontend:** React + TypeScript
-- **Communication:** WebSocket (OpenClaw Gateway protocol)
-- **State:** Local (no backend needed for MVP)
+- **Backend:** Node.js + WebSocket server (lightweight hub)
+- **Frontend:** React + TypeScript (Discord-like layout)
+- **Communication:** Single WebSocket between frontend ↔ Workshop server; server ↔ multiple OpenClaw Gateways
+- **Storage:** SQLite (rooms, messages, connections)
 - **Build:** Vite
 
 ## How It Connects to OpenClaw
@@ -43,70 +44,64 @@ OpenClaw Gateway exposes a WebSocket API with these key methods:
 ## Architecture
 
 ```
-┌──────────────────────────────────────────┐
-│            Workshop (React App)           │
-│                                          │
-│  ┌─────────────────────────────────────┐ │
-│  │         Connection Manager          │ │
-│  │  gateway-1 (luna-agent)    ──ws──►  │ │ OpenClaw Gateway A
-│  │  gateway-2 (leader-agent)  ──ws──►  │ │ OpenClaw Gateway B
-│  │  gateway-3 (dev-agent)     ──ws──►  │ │ OpenClaw Gateway C
-│  │  gateway-4 (pm-agent)      ──ws──►  │ │ ...
-│  └─────────────────────────────────────┘ │
-│                                          │
-│  ┌─────────────────────────────────────┐ │
-│  │           Room Manager              │ │
-│  │  #product  → [luna-agent]           │ │
-│  │  #task-001 → [leader, dev, pm]      │ │
-│  │  #task-002 → [leader, tester]       │ │
-│  └─────────────────────────────────────┘ │
-│                                          │
-│  ┌─────────────────────────────────────┐ │
-│  │              UI Layer               │ │
-│  │  Sidebar: room list                 │ │
-│  │  Main: chat messages (multi-agent)  │ │
-│  │  Thread: sub-conversations          │ │
-│  └─────────────────────────────────────┘ │
-└──────────────────────────────────────────┘
+┌────────────────────┐      ┌──────────────────────┐
+│  Workshop Frontend │      │   Workshop Server    │
+│  (React)           │◄─ws─►│   (Node.js)          │
+│                    │      │                      │
+│  Sidebar: rooms    │      │  ┌─ Gateway Pool ──┐ │
+│  Main: chat        │      │  │ luna-agent  ──ws──►│ OpenClaw A
+│  Members: agents   │      │  │ leader     ──ws──►│ OpenClaw B
+│                    │      │  │ dev-agent  ──ws──►│ OpenClaw C
+│                    │      │  │ pm-agent   ──ws──►│ OpenClaw D
+│                    │      │  └──────────────────┘│
+│                    │      │                      │
+│                    │      │  Room Manager        │
+│                    │      │  Message Store (SQLite)│
+│                    │      │  Event Router        │
+└────────────────────┘      └──────────────────────┘
 ```
+
+Frontend only talks to Workshop Server (one WebSocket, like Discord).
+Server handles all the complexity: multiple gateway connections, message routing, room state.
 
 ## Key Concepts
 
-### Connection
-A WebSocket connection to one OpenClaw Gateway instance. Each connection = one agent.
+### Agent
+A registered OpenClaw Gateway connection. Server maintains the WebSocket.
 
 ```typescript
-interface AgentConnection {
+interface Agent {
   id: string;
   name: string;           // "luna-agent", "dev-agent"
+  avatar?: string;        // URL or emoji
   gatewayUrl: string;     // "ws://localhost:18789"
   authToken: string;
-  status: 'connected' | 'connecting' | 'disconnected';
+  status: 'online' | 'connecting' | 'offline';
 }
 ```
 
 ### Room
-A logical grouping of agent connections. Messages from all agents in a room are interleaved in one chat view.
+Like a Discord channel. Has members (agents), messages are interleaved.
 
 ```typescript
 interface Room {
   id: string;
   name: string;           // "#product", "#task-dark-mode"
-  agents: string[];       // connection IDs
-  messages: Message[];
+  agents: string[];       // agent IDs
   createdAt: Date;
   status: 'active' | 'completed' | 'archived';
 }
 ```
 
 ### Message
-A chat message, tagged with which agent it came from.
+A chat message, tagged with sender (human or agent).
 
 ```typescript
 interface Message {
   id: string;
   roomId: string;
-  agentId: string;        // which connection sent/received this
+  senderId: string;       // agent ID or 'user'
+  senderName: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
@@ -115,40 +110,43 @@ interface Message {
 
 ## MVP Scope
 
-### Must Have (Day 1)
-1. **Connect to multiple OpenClaw gateways** — Add/remove connections via settings
-2. **Rooms** — Create rooms, assign agents to rooms
-3. **Multi-agent chat** — See messages from all agents in a room, send messages (broadcasts to all agents or @-specific agent)
-4. **Real-time** — WebSocket streaming, see agent responses as they come
+### Must Have (v0.1)
+1. **Workshop Server** — Node.js, connects to N OpenClaw gateways, exposes one WebSocket
+2. **Agent Management** — Register/remove agents (gateway URL + token)
+3. **Rooms** — Create rooms, assign agents to rooms
+4. **Multi-agent chat** — Messages from all agents interleaved, send to specific agent via @-mention or broadcast
+5. **Discord-like UI** — Left sidebar (rooms), center (chat), right (agent list)
+6. **Real-time** — Streaming responses, agent status (thinking/idle)
 
-### Nice to Have (Day 2+)
-- Task lifecycle (room status: active → done)
+### Next (v0.2+)
+- Task lifecycle (room status: active → done, completion notification)
 - Threads (sub-conversations within a room)
-- @-mention routing (message goes to specific agent only)
-- Agent status indicators (thinking, idle, error)
 - Room templates ("feature-dev" = leader + pm + dev + tester)
-- Public/shareable room links
+- Public/shareable room links (anyone can view)
+- Agent-to-agent messaging (agent in one room triggers action in another)
 
 ### Not Now
-- Own backend (everything is client-side connecting to OpenClaw gateways)
-- User accounts / auth (single user for now)
+- User accounts / multi-user auth
 - Mobile app
 - Cross-agent memory sharing
+- Fancy UI (keep it functional, not pretty)
 
-## OpenClaw Control UI Reference
+## Comparison: Discord vs Workshop
 
-OpenClaw's built-in UI (Vite + Lit):
-- Source: `openclaw/ui/` 
-- Stack: Lit web components (not React)
-- Connects to one gateway only
-- Single chat view, no rooms/channels concept
-- Manages cron, config, sessions, skills
-
-We're not forking it — we're building a different product that talks to the same API.
+| Aspect | Discord | Workshop |
+|--------|---------|----------|
+| Server | Discord's cloud | Workshop Server (self-hosted) |
+| Members | Humans + bots | Humans + OpenClaw agents |
+| Channels | Manual create | Can be auto-created by agents |
+| Messages | Human-to-human | Human-to-agent, agent-to-agent |
+| Bot integration | Discord API | OpenClaw Gateway WebSocket |
+| Permissions | Role-based | Room-based (who's in the room) |
+| Config reload issue | N/A | N/A (Workshop manages connections) |
+| Cross-channel notify | Bots can post anywhere | Built-in event routing |
 
 ## Open Questions
 
-- [ ] Can one Gateway serve multiple "sessions" (e.g., different channel contexts) or do we need one Gateway per agent?
-- [ ] How to handle message routing when user sends to a room with multiple agents — broadcast or addressed?
-- [ ] Should rooms persist across browser reloads? (localStorage for MVP)
-- [ ] How to display agent identity (name, avatar) in the chat — pull from gateway or configure in Workshop?
+- [ ] One gateway per agent, or can one gateway serve multiple agent identities?
+- [ ] Message routing: broadcast to all agents in room, or always @-addressed?
+- [ ] SQLite vs in-memory for MVP? (SQLite is simple and persistent)
+- [ ] How to handle agent streaming responses in the multi-agent chat view?
