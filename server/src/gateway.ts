@@ -18,6 +18,7 @@ export class GatewayConnection {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connected = false; // true after successful connect handshake
   private pendingCallbacks = new Map<string, (data: any) => void>();
+  private ownSessionKeys = new Set<string>(); // session keys created by Workshop
 
   onMessage?: (agentId: string, content: string) => void;
   onStatusChange?: (agentId: string, status: Agent['status']) => void;
@@ -80,6 +81,10 @@ export class GatewayConnection {
     const idempotencyKey = uuid();
     // sessionKey: use "main" or a room-scoped key
     const sessionKey = roomId ? `workshop:${roomId}` : 'main';
+
+    // Track this session key so we only process events from our own sessions
+    this.ownSessionKeys.add(sessionKey);
+
     const frame = {
       type: 'req',
       id,
@@ -112,6 +117,7 @@ export class GatewayConnection {
     }
     this.connected = false;
     this.pendingCallbacks.clear();
+    this.ownSessionKeys.clear();
     this.setStatus('offline');
   }
 
@@ -147,6 +153,12 @@ export class GatewayConnection {
 
       case 'chat': {
         // Chat events: { runId, sessionKey, seq, state, message?, errorMessage? }
+        // Only process events from sessions Workshop created — ignore Feishu/Discord/etc
+        const eventSessionKey = payload?.sessionKey;
+        if (eventSessionKey && !this.ownSessionKeys.has(eventSessionKey)) {
+          // Event from another session (Feishu, Discord, etc.) — skip
+          break;
+        }
         this.handleChatEvent(payload);
         break;
       }
@@ -260,7 +272,7 @@ export class GatewayConnection {
           token: this.agent.authToken,
         },
         role: 'operator',
-        scopes: ['operator.admin'],
+        scopes: ['operator.admin', 'operator.write', 'operator.read'],
       },
     };
 
