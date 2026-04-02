@@ -52,6 +52,13 @@ export class Router {
     gw.onMessage = (agentId: string, roomId: string, content: string) => {
       if (!content) return;
 
+      // Filter silent reply tokens — these are not real messages
+      const trimmed = content.trim();
+      if (trimmed === 'NO_REPLY' || trimmed === 'HEARTBEAT_OK') {
+        console.log(`[msg] agent=${agentId} room=${roomId} silent (${trimmed}), not broadcasting`);
+        return;
+      }
+
       const agent = this.agents.get(agentId);
       const senderName = agent?.name ?? agentId;
 
