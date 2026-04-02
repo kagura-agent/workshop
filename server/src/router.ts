@@ -132,20 +132,16 @@ export class Router {
       const agentName = agent?.name?.toLowerCase() ?? '';
       const mentioned = mentions.has(agent_id.toLowerCase()) || mentions.has(agentName);
 
-      if (hasMentions) {
-        // Message has @mentions — only send to mentioned agents
-        if (!mentioned) {
-          console.log(`[msg] skipping agent=${agent_id} room=${roomId} (message has @mentions, this agent not mentioned)`);
-          continue;
-        }
-        console.log(`[msg] forwarding to agent=${agent_id} room=${roomId} (mentioned)`);
-      } else if (require_mention) {
-        // No @mentions in message, agent requires mention — skip
-        console.log(`[msg] skipping agent=${agent_id} room=${roomId} (requireMention=true, no mentions in message)`);
+      if (require_mention && !mentioned) {
+        // Agent requires mention but wasn't mentioned — skip
+        console.log(`[msg] skipping agent=${agent_id} room=${roomId} (requireMention=true, not mentioned)`);
         continue;
+      }
+
+      if (require_mention && mentioned) {
+        console.log(`[msg] forwarding to agent=${agent_id} room=${roomId} (mentioned)`);
       } else {
-        // No @mentions, agent doesn't require mention — send
-        console.log(`[msg] forwarding to agent=${agent_id} room=${roomId} (requireMention=false, broadcast)`);
+        console.log(`[msg] forwarding to agent=${agent_id} room=${roomId} (requireMention=false, sees all)`);
       }
 
       this.gateway.sendChat(content, roomId, agent_id);
