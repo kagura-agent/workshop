@@ -14,6 +14,13 @@ export class Router {
   addClient(ws: WebSocket): void {
     this.clients.add(ws);
 
+    // Immediately send current rooms and agents so the UI populates on load
+    this.handleListRooms(ws);
+    this.handleListAgents(ws);
+
+    // Send message history for all active rooms
+    this.sendAllRoomHistory(ws);
+
     ws.on('message', (raw) => {
       try {
         const msg: ClientMessage = JSON.parse(raw.toString());
@@ -31,22 +38,26 @@ export class Router {
   addGateway(agent: Agent): void {
     const gw = new GatewayConnection(agent);
 
-    gw.onMessage = (agentId, data: any) => {
-      // Forward agent responses as messages to the room
-      // MVP: assumes data has content we can broadcast
-      if (data?.params?.message || data?.result?.message) {
-        const content = data?.params?.message || data?.result?.message || '';
-        // Find rooms this agent is in and broadcast
-        const db = getDb();
-        const rooms = db.prepare(
-          'SELECT room_id FROM room_agents WHERE agent_id = ?'
-        ).all(agentId) as { room_id: string }[];
+    gw.onMessage = (agentId, content: string) => {
+      // content is the actual message text (already extracted by GatewayConnection)
+      if (!content) return;
 
-        for (const { room_id } of rooms) {
-          const msg = this.storeMessage(room_id, agentId, agent.name, 'assistant', String(content));
-          this.broadcast({ type: 'message', roomId: room_id, message: msg });
-        }
+      // Find rooms this agent is in and broadcast
+      const db = getDb();
+      const rooms = db.prepare(
+        'SELECT room_id FROM room_agents WHERE agent_id = ?'
+      ).all(agentId) as { room_id: string }[];
+
+      for (const { room_id } of rooms) {
+        const msg = this.storeMessage(room_id, agentId, agent.name, 'assistant', content);
+        this.broadcast({ type: 'message', roomId: room_id, message: msg });
       }
+    };
+
+    gw.onStatusChange = (agentId, status) => {
+      // Update agent status in DB
+      const db = getDb();
+      db.prepare('UPDATE agents SET status = ? WHERE id = ?').run(status, agentId);
     };
 
     this.gateways.set(agent.id, gw);
@@ -86,7 +97,7 @@ export class Router {
     for (const { agent_id } of roomAgents) {
       const gw = this.gateways.get(agent_id);
       if (gw) {
-        gw.sendChat(content);
+        gw.sendChat(content, roomId);
       }
     }
   }
@@ -94,13 +105,20 @@ export class Router {
   private handleListRooms(ws: WebSocket): void {
     const db = getDb();
     const rows = db.prepare('SELECT * FROM rooms').all() as any[];
-    const rooms: Room[] = rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      agents: [],
-      createdAt: r.created_at,
-      status: r.status,
-    }));
+    const rooms: Room[] = rows.map((r) => {
+      // Also fetch agent IDs for each room
+      const agents = db.prepare(
+        'SELECT agent_id FROM room_agents WHERE room_id = ?'
+      ).all(r.id) as { agent_id: string }[];
+
+      return {
+        id: r.id,
+        name: r.name,
+        agents: agents.map((a) => a.agent_id),
+        createdAt: r.created_at,
+        status: r.status,
+      };
+    });
     this.sendTo(ws, { type: 'room_list', rooms });
   }
 
@@ -131,6 +149,33 @@ export class Router {
 
     const room: Room = { id, name, agents: agentIds, createdAt: now, status: 'active' };
     this.sendTo(ws, { type: 'room_created', room });
+  }
+
+  /**
+   * Send message history for all rooms to a newly connected client.
+   */
+  private sendAllRoomHistory(ws: WebSocket): void {
+    const db = getDb();
+    const rooms = db.prepare('SELECT id FROM rooms').all() as { id: string }[];
+
+    for (const { id: roomId } of rooms) {
+      const rows = db.prepare(
+        'SELECT * FROM messages WHERE room_id = ? ORDER BY timestamp ASC LIMIT 200'
+      ).all(roomId) as any[];
+
+      for (const r of rows) {
+        const msg: Message = {
+          id: r.id,
+          roomId: r.room_id,
+          senderId: r.sender_id,
+          senderName: r.sender_name,
+          role: r.role,
+          content: r.content,
+          timestamp: r.timestamp,
+        };
+        this.sendTo(ws, { type: 'message', roomId, message: msg });
+      }
+    }
   }
 
   private storeMessage(

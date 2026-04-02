@@ -1,7 +1,11 @@
 import { WebSocketServer } from 'ws';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { getDb, close } from './db.js';
 import { Router } from './router.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3100;
 
 // Initialize database
@@ -10,6 +14,63 @@ getDb();
 const wss = new WebSocketServer({ port: PORT });
 const router = new Router();
 
+// ── Load workshop.json config ────────────────────────────────────
+const configPath = path.join(__dirname, '..', '..', 'workshop.json');
+try {
+  const raw = fs.readFileSync(configPath, 'utf-8');
+  const config = JSON.parse(raw);
+  console.log(`[workshop] loaded config from ${configPath}`);
+
+  const db = getDb();
+
+  // Register agents
+  if (Array.isArray(config.agents)) {
+    for (const a of config.agents) {
+      db.prepare(
+        `INSERT OR REPLACE INTO agents (id, name, avatar, gateway_url, auth_token, status)
+         VALUES (?, ?, ?, ?, ?, 'offline')`
+      ).run(a.id, a.name, a.avatar ?? '', a.gatewayUrl, a.token);
+
+      console.log(`[workshop] registered agent: ${a.name} (${a.id})`);
+
+      // Connect to gateway
+      router.addGateway({
+        id: a.id,
+        name: a.name,
+        avatar: a.avatar,
+        gatewayUrl: a.gatewayUrl,
+        authToken: a.token,
+        status: 'offline',
+      });
+    }
+  }
+
+  // Create rooms
+  if (Array.isArray(config.rooms)) {
+    for (const r of config.rooms) {
+      const now = new Date().toISOString();
+      db.prepare(
+        `INSERT OR IGNORE INTO rooms (id, name, created_at, status)
+         VALUES (?, ?, ?, 'active')`
+      ).run(r.id, r.name, now);
+
+      // Link agents to room
+      if (Array.isArray(r.agents)) {
+        for (const agentId of r.agents) {
+          db.prepare(
+            `INSERT OR IGNORE INTO room_agents (room_id, agent_id) VALUES (?, ?)`
+          ).run(r.id, agentId);
+        }
+      }
+
+      console.log(`[workshop] created room: ${r.name} (${r.id}) with agents: ${r.agents?.join(', ')}`);
+    }
+  }
+} catch (err: any) {
+  console.warn(`[workshop] could not load config: ${err.message}`);
+}
+
+// ── WebSocket server ─────────────────────────────────────────────
 wss.on('connection', (ws) => {
   console.log('[server] client connected');
   router.addClient(ws);
