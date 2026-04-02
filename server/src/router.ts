@@ -60,7 +60,7 @@ export class Router {
 
       // Filter OpenClaw protocol tokens — these are not real messages
       const trimmed = content.trim();
-      if (trimmed === 'NO_REPLY' || trimmed === 'HEARTBEAT_OK') {
+      if (trimmed === 'NO_REPLY' || trimmed === 'HEARTBEAT_OK' || trimmed === 'NO') {
         console.log(`[msg] agent=${agentId} room=${roomId} silent (${trimmed}), not broadcasting`);
         return;
       }
