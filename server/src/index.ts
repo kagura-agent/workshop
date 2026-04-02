@@ -23,25 +23,22 @@ try {
 
   const db = getDb();
 
-  // Register agents
+  // Register agents (metadata only — no per-agent gateway)
   if (Array.isArray(config.agents)) {
     for (const a of config.agents) {
       db.prepare(
-        `INSERT OR REPLACE INTO agents (id, name, avatar, gateway_url, auth_token, status)
-         VALUES (?, ?, ?, ?, ?, 'offline')`
-      ).run(a.id, a.name, a.avatar ?? '', a.gatewayUrl, a.token);
+        `INSERT OR REPLACE INTO agents (id, name, avatar, status)
+         VALUES (?, ?, ?, 'offline')`
+      ).run(a.id, a.name, a.avatar ?? '');
 
-      console.log(`[workshop] registered agent: ${a.name} (${a.id})`);
-
-      // Connect to gateway
-      router.addGateway({
+      router.registerAgent({
         id: a.id,
         name: a.name,
         avatar: a.avatar,
-        gatewayUrl: a.gatewayUrl,
-        authToken: a.token,
         status: 'offline',
       });
+
+      console.log(`[workshop] registered agent: ${a.name} (${a.id})`);
     }
   }
 
@@ -54,7 +51,6 @@ try {
          VALUES (?, ?, ?, 'active')`
       ).run(r.id, r.name, now);
 
-      // Link agents to room
       if (Array.isArray(r.agents)) {
         for (const agentId of r.agents) {
           db.prepare(
@@ -65,6 +61,14 @@ try {
 
       console.log(`[workshop] created room: ${r.name} (${r.id}) with agents: ${r.agents?.join(', ')}`);
     }
+  }
+
+  // Connect single shared gateway
+  if (config.gateway?.url && config.gateway?.token) {
+    router.initGateway(config.gateway.url, config.gateway.token);
+    console.log(`[workshop] gateway: ${config.gateway.url}`);
+  } else {
+    console.warn(`[workshop] no gateway config found`);
   }
 } catch (err: any) {
   console.warn(`[workshop] could not load config: ${err.message}`);

@@ -2,8 +2,6 @@ export interface Agent {
   id: string;
   name: string;
   avatar?: string;
-  gatewayUrl: string;
-  authToken: string;
   status: 'online' | 'connecting' | 'offline';
 }
 

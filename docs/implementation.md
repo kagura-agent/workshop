@@ -6,7 +6,7 @@ Last updated: 2026-04-02
 
 ### Connection Handshake
 
-Workshop connects to OpenClaw Gateway via WebSocket. The protocol:
+Workshop connects to OpenClaw Gateway via a **single shared WebSocket**. All agents share this connection. The protocol:
 
 1. **Open WS** to `ws://localhost:18789` (no auth headers)
 2. **Receive** `{ type: "event", event: "connect.challenge", payload: { nonce } }`
@@ -60,7 +60,9 @@ This allows localhost HTTP (non-HTTPS) connections to retain scopes without devi
 
 **Do NOT use `dangerouslyDisableDeviceAuth: true`** — it breaks the browser Control UI's normal auth flow.
 
-### Sending Messages
+### Sending Messages (Multi-Agent)
+
+When a user sends a message in a room, Workshop sends a **separate `chat.send`** for each agent in the room:
 
 ```json
 {
@@ -68,24 +70,24 @@ This allows localhost HTTP (non-HTTPS) connections to retain scopes without devi
   "id": "<uuid>",
   "method": "chat.send",
   "params": {
-    "sessionKey": "workshop:<roomId>",
+    "sessionKey": "agent:<agentId>:workshop:<roomId>",
     "message": "<content>",
     "idempotencyKey": "<uuid>"
   }
 }
 ```
 
+Each agent gets its own session key, so agents maintain **independent conversation contexts**. For example, in room `#product` with agents `kagura` and `anan`:
+- `agent:kagura:workshop:product` — Kagura's session
+- `agent:anan:workshop:product` — Anan's session
+
 Response: `{ type: "res", id, ok: true, payload: { ... } }`
 
-### ⚠️ Session Key Prefix
+### Session Key Format
 
-Workshop sends `sessionKey: "workshop:product"`, but Gateway internally prefixes it as `agent:kagura:workshop:product`. Events come back with the **prefixed** key.
+**`agent:{agentId}:workshop:{roomId}`**
 
-**Solution:** Track both formats in `ownSessionKeys`:
-```typescript
-this.ownSessionKeys.add(sessionKey);                          // "workshop:product"
-this.ownSessionKeys.add(`agent:${this.agent.id}:${sessionKey}`); // "agent:kagura:workshop:product"
-```
+Workshop sends the full session key directly. Events come back with the same key. Workshop parses `agentId` and `roomId` from the session key to route responses to the correct room and tag them with the correct agent name/avatar.
 
 ### Receiving Agent Responses
 
@@ -138,9 +140,9 @@ Gateway broadcasts **two types of events** for the same agent response:
 ### Session Storage
 
 Workshop sessions are stored in OpenClaw's normal session system:
-- Session key: `agent:kagura:workshop:product`
+- Session key: `agent:{agentId}:workshop:{roomId}`
 - Channel: `webchat`
-- Session file: `~/.openclaw/agents/kagura/sessions/<uuid>.jsonl`
+- Session file: `~/.openclaw/agents/{agentId}/sessions/<uuid>.jsonl`
 - Visible in Control UI alongside Feishu/Discord sessions
 
 ## Server Architecture
@@ -148,10 +150,10 @@ Workshop sessions are stored in OpenClaw's normal session system:
 ```
 workshop/server/
 ├── src/
-│   ├── index.ts      — Entry: loads config, starts WS server, connects gateways
+│   ├── index.ts      — Entry: loads config, starts WS server, inits gateway
 │   ├── db.ts         — SQLite: agents, rooms, room_agents, messages
-│   ├── router.ts     — Message routing: frontend ↔ gateway
-│   ├── gateway.ts    — Gateway connection: auth, send, receive
+│   ├── router.ts     — Message routing: frontend ↔ gateway (single connection)
+│   ├── gateway.ts    — Shared gateway connection: auth, send, receive
 │   └── types.ts      — TypeScript interfaces
 ├── dist/             — Compiled JS (run with `node dist/index.js`)
 └── workshop.db       — SQLite database (auto-created)
@@ -161,38 +163,41 @@ workshop/server/
 
 ```json
 {
+  "gateway": {
+    "url": "ws://localhost:18789",
+    "token": "<gateway-auth-token>"
+  },
   "agents": [
-    {
-      "id": "kagura",
-      "name": "Kagura",
-      "avatar": "🌸",
-      "gatewayUrl": "ws://localhost:18789",
-      "token": "<gateway-auth-token>"
-    }
+    { "id": "kagura", "name": "Kagura", "avatar": "🌸" },
+    { "id": "anan", "name": "Anan", "avatar": "🤖" },
+    { "id": "ruantang", "name": "Ruantang", "avatar": "🍮" }
   ],
   "rooms": [
-    {
-      "id": "product",
-      "name": "#product",
-      "agents": ["kagura"]
-    }
+    { "id": "product", "name": "#product", "agents": ["kagura", "anan"] },
+    { "id": "dev", "name": "#dev", "agents": ["kagura", "ruantang"] },
+    { "id": "war-room", "name": "#war-room", "agents": ["kagura", "anan", "ruantang"] }
   ]
 }
 ```
 
-### Message Flow
+Gateway URL and token are shared across all agents. Each agent is metadata only (id, name, avatar). Rooms define which agents participate.
+
+### Message Flow (Multi-Agent)
 
 ```
-Browser → WS → Workshop Server → WS → OpenClaw Gateway → Agent
-                                                            │
-Browser ← WS ← Workshop Server ← WS ← OpenClaw Gateway ←──┘
+Browser → WS → Workshop Server → WS → OpenClaw Gateway → Agent 1
+                                   └→ (same WS)          → Agent 2
+                                                            │ │
+Browser ← WS ← Workshop Server ← WS ← OpenClaw Gateway ←──┘ │
+Browser ← WS ← Workshop Server ← WS ← OpenClaw Gateway ←────┘
 ```
 
 1. User sends `{ type: "send_message", roomId, content }` via WebSocket
 2. Server stores message in SQLite, broadcasts to all connected browsers
-3. Server forwards to gateway via `chat.send`
-4. Gateway runs agent, streams `chat` events back
-5. Server receives `final` event, stores agent message, broadcasts to browsers
+3. Server loops over room's agents, sends `chat.send` for **each** with unique session key
+4. Gateway runs each agent independently, streams `chat` events back
+5. Server parses `agentId` from event's `sessionKey`, looks up agent name/avatar
+6. Server stores agent message, broadcasts to browsers with correct sender info
 
 ### Logging
 

@@ -5,11 +5,12 @@ import { GatewayConnection } from './gateway.js';
 import type { ClientMessage, ServerMessage, Message, Room, Agent } from './types.js';
 
 /**
- * Router — bridges frontend WebSocket clients with OpenClaw Gateway connections.
+ * Router — bridges frontend WebSocket clients with a single shared OpenClaw Gateway connection.
  */
 export class Router {
   private clients = new Set<WebSocket>();
-  private gateways = new Map<string, GatewayConnection>(); // agentId → connection
+  private gateway: GatewayConnection | null = null;
+  private agents = new Map<string, Agent>(); // agentId → agent metadata
 
   addClient(ws: WebSocket): void {
     this.clients.add(ws);
@@ -39,34 +40,37 @@ export class Router {
     });
   }
 
-  addGateway(agent: Agent): void {
-    const gw = new GatewayConnection(agent);
+  /** Register agent metadata (for looking up name/avatar on incoming messages). */
+  registerAgent(agent: Agent): void {
+    this.agents.set(agent.id, agent);
+  }
 
-    gw.onMessage = (agentId, content: string) => {
-      // content is the actual message text (already extracted by GatewayConnection)
+  /** Initialize the single shared gateway connection. */
+  initGateway(gatewayUrl: string, authToken: string): void {
+    const gw = new GatewayConnection(gatewayUrl, authToken);
+
+    gw.onMessage = (agentId: string, roomId: string, content: string) => {
       if (!content) return;
 
-      console.log(`[msg] agent=${agentId} replied: "${content.slice(0, 120)}${content.length > 120 ? '...' : ''}"`);
+      const agent = this.agents.get(agentId);
+      const senderName = agent?.name ?? agentId;
 
-      // Find rooms this agent is in and broadcast
+      console.log(`[msg] agent=${agentId} room=${roomId} replied: "${content.slice(0, 120)}${content.length > 120 ? '...' : ''}"`);
+
+      const msg = this.storeMessage(roomId, agentId, senderName, 'assistant', content);
+      this.broadcast({ type: 'message', roomId, message: msg });
+    };
+
+    gw.onStatusChange = (status) => {
+      // Update all agents' status in DB
       const db = getDb();
-      const rooms = db.prepare(
-        'SELECT room_id FROM room_agents WHERE agent_id = ?'
-      ).all(agentId) as { room_id: string }[];
-
-      for (const { room_id } of rooms) {
-        const msg = this.storeMessage(room_id, agentId, agent.name, 'assistant', content);
-        this.broadcast({ type: 'message', roomId: room_id, message: msg });
+      for (const [agentId, agent] of this.agents) {
+        agent.status = status;
+        db.prepare('UPDATE agents SET status = ? WHERE id = ?').run(status, agentId);
       }
     };
 
-    gw.onStatusChange = (agentId, status) => {
-      // Update agent status in DB
-      const db = getDb();
-      db.prepare('UPDATE agents SET status = ? WHERE id = ?').run(status, agentId);
-    };
-
-    this.gateways.set(agent.id, gw);
+    this.gateway = gw;
     gw.connect();
   }
 
@@ -95,20 +99,20 @@ export class Router {
     console.log(`[msg] user → room=${roomId}: "${content.slice(0, 80)}"`);
     this.broadcast({ type: 'message', roomId, message: msg });
 
-    // Forward to all agents in the room
+    if (!this.gateway) {
+      console.warn(`[msg] no gateway connection`);
+      return;
+    }
+
+    // Forward to EACH agent in the room via separate chat.send calls
     const db = getDb();
     const roomAgents = db.prepare(
       'SELECT agent_id FROM room_agents WHERE room_id = ?'
     ).all(roomId) as { agent_id: string }[];
 
     for (const { agent_id } of roomAgents) {
-      const gw = this.gateways.get(agent_id);
-      if (gw) {
-        console.log(`[msg] forwarding to agent=${agent_id}`);
-        gw.sendChat(content, roomId);
-      } else {
-        console.warn(`[msg] no gateway for agent=${agent_id}`);
-      }
+      console.log(`[msg] forwarding to agent=${agent_id} room=${roomId}`);
+      this.gateway.sendChat(content, roomId, agent_id);
     }
   }
 
@@ -116,7 +120,6 @@ export class Router {
     const db = getDb();
     const rows = db.prepare('SELECT * FROM rooms').all() as any[];
     const rooms: Room[] = rows.map((r) => {
-      // Also fetch agent IDs for each room
       const agents = db.prepare(
         'SELECT agent_id FROM room_agents WHERE room_id = ?'
       ).all(r.id) as { agent_id: string }[];
@@ -139,8 +142,6 @@ export class Router {
       id: r.id,
       name: r.name,
       avatar: r.avatar,
-      gatewayUrl: r.gateway_url,
-      authToken: r.auth_token,
       status: r.status as Agent['status'],
     }));
     this.sendTo(ws, { type: 'agent_list', agents });
@@ -161,9 +162,6 @@ export class Router {
     this.sendTo(ws, { type: 'room_created', room });
   }
 
-  /**
-   * Send message history for all rooms to a newly connected client.
-   */
   private sendAllRoomHistory(ws: WebSocket): void {
     const db = getDb();
     const rooms = db.prepare('SELECT id FROM rooms').all() as { id: string }[];
@@ -206,7 +204,7 @@ export class Router {
   private broadcast(msg: ServerMessage): void {
     const data = JSON.stringify(msg);
     for (const client of this.clients) {
-      if (client.readyState === 1) { // WebSocket.OPEN
+      if (client.readyState === 1) {
         client.send(data);
       }
     }

@@ -1,9 +1,11 @@
 import WebSocket from 'ws';
 import { v4 as uuid } from 'uuid';
-import type { Agent } from './types.js';
 
 /**
- * GatewayConnection — maintains a WebSocket connection to one OpenClaw Gateway.
+ * GatewayConnection — single shared WebSocket connection to OpenClaw Gateway.
+ *
+ * All agents share this connection. Each agent+room combination gets its own
+ * session key: `agent:{agentId}:workshop:{roomId}`.
  *
  * Implements the OpenClaw Gateway challenge-response auth protocol:
  * 1. Open WS (no auth headers)
@@ -14,35 +16,33 @@ import type { Agent } from './types.js';
  */
 export class GatewayConnection {
   private ws: WebSocket | null = null;
-  private agent: Agent;
+  private gatewayUrl: string;
+  private authToken: string;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private connected = false; // true after successful connect handshake
+  private connected = false;
   private pendingCallbacks = new Map<string, (data: any) => void>();
-  private ownSessionKeys = new Set<string>(); // session keys created by Workshop
+  private ownSessionKeys = new Set<string>();
 
-  onMessage?: (agentId: string, content: string) => void;
-  onStatusChange?: (agentId: string, status: Agent['status']) => void;
+  /** Callback for incoming agent messages. agentId + roomId parsed from sessionKey. */
+  onMessage?: (agentId: string, roomId: string, content: string) => void;
+  onStatusChange?: (status: 'online' | 'connecting' | 'offline') => void;
 
-  constructor(agent: Agent) {
-    this.agent = agent;
-  }
-
-  get agentId(): string {
-    return this.agent.id;
+  constructor(gatewayUrl: string, authToken: string) {
+    this.gatewayUrl = gatewayUrl;
+    this.authToken = authToken;
   }
 
   connect(): void {
     if (this.ws) return;
 
     this.connected = false;
-    this.setStatus('connecting');
-    console.log(`[gateway] connecting to ${this.agent.name} at ${this.agent.gatewayUrl}`);
+    this.onStatusChange?.('connecting');
+    console.log(`[gateway] connecting to ${this.gatewayUrl}`);
 
-    // No auth headers — the protocol uses challenge-response over the WS channel
-    this.ws = new WebSocket(this.agent.gatewayUrl);
+    this.ws = new WebSocket(this.gatewayUrl);
 
     this.ws.on('open', () => {
-      console.log(`[gateway] WebSocket open to ${this.agent.name}, waiting for challenge…`);
+      console.log(`[gateway] WebSocket open, waiting for challenge…`);
     });
 
     this.ws.on('message', (raw) => {
@@ -55,37 +55,36 @@ export class GatewayConnection {
     });
 
     this.ws.on('close', () => {
-      console.log(`[gateway] disconnected from ${this.agent.name}`);
+      console.log(`[gateway] disconnected`);
       this.ws = null;
       this.connected = false;
       this.pendingCallbacks.clear();
-      this.setStatus('offline');
+      this.onStatusChange?.('offline');
       this.scheduleReconnect();
     });
 
     this.ws.on('error', (err) => {
-      console.error(`[gateway] error for ${this.agent.name}:`, err.message);
+      console.error(`[gateway] error:`, err.message);
     });
   }
 
   /**
-   * Send a chat message to the agent via gateway's chat.send method.
+   * Send a chat message to a specific agent in a specific room.
+   * Session key format: agent:{agentId}:workshop:{roomId}
    */
-  sendChat(content: string, roomId?: string): void {
+  sendChat(content: string, roomId: string, agentId: string): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.connected) {
-      console.warn(`[gateway] cannot send to ${this.agent.name}: not connected`);
+      console.warn(`[gateway] cannot send: not connected`);
       return;
     }
 
     const id = uuid();
     const idempotencyKey = uuid();
-    // sessionKey: use "main" or a room-scoped key
-    const sessionKey = roomId ? `workshop:${roomId}` : 'main';
+    // Gateway internally prefixes session keys, so we send without the agent prefix
+    const sessionKey = `agent:${agentId}:workshop:${roomId}`;
 
     // Track this session key so we only process events from our own sessions
-    // Gateway prefixes with "agent:{agentId}:" internally
     this.ownSessionKeys.add(sessionKey);
-    this.ownSessionKeys.add(`agent:${this.agent.id}:${sessionKey}`);
 
     const frame = {
       type: 'req',
@@ -98,15 +97,14 @@ export class GatewayConnection {
       },
     };
 
-    // Register callback to handle the ack response
     this.pendingCallbacks.set(id, (resp: any) => {
       if (!resp.ok) {
-        console.error(`[gateway] chat.send rejected by ${this.agent.name}:`, resp.error?.message ?? resp);
+        console.error(`[gateway] chat.send rejected for agent=${agentId} room=${roomId}:`, resp.error?.message ?? resp);
       }
     });
 
     this.ws.send(JSON.stringify(frame));
-    console.log(`[gateway] → chat.send to ${this.agent.name} session=${sessionKey}: "${content.slice(0, 80)}"`);
+    console.log(`[gateway] → chat.send agent=${agentId} room=${roomId} session=${sessionKey}: "${content.slice(0, 80)}"`);
   }
 
   disconnect(): void {
@@ -121,7 +119,7 @@ export class GatewayConnection {
     this.connected = false;
     this.pendingCallbacks.clear();
     this.ownSessionKeys.clear();
-    this.setStatus('offline');
+    this.onStatusChange?.('offline');
   }
 
   // ── protocol handling ──────────────────────────────────────────
@@ -135,7 +133,6 @@ export class GatewayConnection {
     }
 
     if (frameType === 'res') {
-      // Response to one of our requests
       const id = data?.id;
       if (id && this.pendingCallbacks.has(id)) {
         const cb = this.pendingCallbacks.get(id)!;
@@ -149,7 +146,6 @@ export class GatewayConnection {
   private handleEvent(frame: any): void {
     const { event, payload } = frame;
 
-    // Debug: log chat/agent events with session info
     if (event === 'chat') {
       const sk = payload?.sessionKey ?? 'none';
       console.log(`[gateway] ← chat state=${payload?.state} session=${sk}`);
@@ -161,103 +157,60 @@ export class GatewayConnection {
         break;
 
       case 'chat': {
-        // Chat events from gateway (TUI/Control UI format): { runId, sessionKey, state, message }
         const chatSessionKey = payload?.sessionKey;
         if (chatSessionKey && !this.ownSessionKeys.has(chatSessionKey)) {
           break;
         }
-        console.log(`[gateway] ← chat event: state=${payload?.state} session=${chatSessionKey}`);
         this.handleChatEvent(payload);
         break;
       }
 
-      case 'agent': {
-        // Agent events (broadcast format) — skip text processing to avoid duplicates
-        // (chat events already handle the response)
+      case 'agent':
+        // Ignored — chat events already handle responses (avoids duplicates)
         break;
-      }
 
       case 'tick':
-        // keepalive, ignore
         break;
 
       default:
-        // Unknown event, log for debugging
-        // console.log(`[gateway] ${this.agent.name} event: ${event}`);
         break;
     }
   }
 
   /**
-   * Handle chat events (TUI/Control UI format).
-   * Format: { runId, sessionKey, state: "delta"|"final"|"error", message: { role, content, timestamp } }
+   * Handle chat events. Parse agentId and roomId from sessionKey.
+   * Format: agent:{agentId}:workshop:{roomId}
    */
   private handleChatEvent(payload: any): void {
     if (!payload) return;
 
     const state = payload.state;
+    const sessionKey = payload.sessionKey as string | undefined;
+
+    // Parse agentId and roomId from sessionKey
+    const parsed = this.parseSessionKey(sessionKey);
+    if (!parsed) return;
+
+    const { agentId, roomId } = parsed;
 
     switch (state) {
-      case 'delta': {
-        // Streaming delta
-        const message = payload.message;
-        const text = this.extractChatText(message);
-        if (text) {
-          console.log(`[gateway] ← chat delta from ${this.agent.name}: "${text.slice(0, 80)}${text.length > 80 ? '...' : ''}"`);
-          // Don't emit deltas as messages yet - wait for final
-        }
+      case 'delta':
+        // Don't emit deltas — wait for final
         break;
-      }
 
       case 'final': {
         const message = payload.message;
         const text = this.extractChatText(message);
         if (text) {
-          console.log(`[gateway] ← chat final from ${this.agent.name}: "${text.slice(0, 120)}${text.length > 120 ? '...' : ''}"`);
-          this.onMessage?.(this.agent.id, text);
+          console.log(`[gateway] ← chat final agent=${agentId} room=${roomId}: "${text.slice(0, 120)}${text.length > 120 ? '...' : ''}"`);
+          this.onMessage?.(agentId, roomId, text);
         }
         break;
       }
 
-      case 'error': {
-        console.error(`[gateway] ${this.agent.name} chat error:`, payload.errorMessage ?? 'Unknown');
+      case 'error':
+        console.error(`[gateway] chat error agent=${agentId} room=${roomId}:`, payload.errorMessage ?? 'Unknown');
         break;
-      }
-
-      default:
-        console.log(`[gateway] ← chat state=${state} from ${this.agent.name}`);
-        break;
-    }
-  }
-
-  /**
-   * Handle agent events (broadcast format).
-   * Format: { runId, sessionKey, stream: "assistant"|"lifecycle"|"tool", data: { text, delta, phase, ... } }
-   */
-  private handleAgentEvent(payload: any): void {
-    if (!payload) return;
-
-    const stream = payload.stream;
-    const data = payload.data;
-
-    switch (stream) {
-      case 'assistant': {
-        const text = data?.text;
-        if (text && typeof text === 'string') {
-          const isDelta = data?.delta === true;
-          if (!isDelta) {
-            console.log(`[gateway] ← agent final from ${this.agent.name}: "${text.slice(0, 120)}${text.length > 120 ? '...' : ''}"`);
-            this.onMessage?.(this.agent.id, text);
-          }
-        }
-        break;
-      }
-
-      case 'lifecycle': {
-        const phase = data?.phase;
-        console.log(`[gateway] ← lifecycle from ${this.agent.name}: phase=${phase}`);
-        break;
-      }
 
       default:
         break;
@@ -265,8 +218,15 @@ export class GatewayConnection {
   }
 
   /**
-   * Extract plain text from a chat message object.
+   * Parse session key format: agent:{agentId}:workshop:{roomId}
    */
+  private parseSessionKey(sessionKey: string | undefined): { agentId: string; roomId: string } | null {
+    if (!sessionKey) return null;
+    const match = sessionKey.match(/^agent:([^:]+):workshop:([^:]+)$/);
+    if (!match) return null;
+    return { agentId: match[1], roomId: match[2] };
+  }
+
   private extractChatText(message: any): string {
     if (!message) return '';
     if (typeof message.text === 'string') return message.text;
@@ -282,7 +242,7 @@ export class GatewayConnection {
 
   private handleChallenge(payload: any): void {
     const nonce = payload?.nonce;
-    console.log(`[gateway] received challenge from ${this.agent.name} (nonce: ${nonce})`);
+    console.log(`[gateway] received challenge (nonce: ${nonce})`);
 
     const id = uuid();
     const connectRequest = {
@@ -301,31 +261,25 @@ export class GatewayConnection {
         },
         caps: [],
         auth: {
-          token: this.agent.authToken,
+          token: this.authToken,
         },
         role: 'operator',
         scopes: ['operator.admin', 'operator.write', 'operator.read'],
       },
     };
 
-    // Register callback for the connect response
     this.pendingCallbacks.set(id, (resp: any) => {
       if (resp.ok) {
-        console.log(`[gateway] connected to ${this.agent.name}`, JSON.stringify(resp.payload?.type ?? resp.payload));
+        console.log(`[gateway] connected`, JSON.stringify(resp.payload?.type ?? resp.payload));
         this.connected = true;
-        this.setStatus('online');
+        this.onStatusChange?.('online');
       } else {
-        console.error(`[gateway] connect rejected by ${this.agent.name}:`, resp.error?.message ?? resp);
+        console.error(`[gateway] connect rejected:`, resp.error?.message ?? resp);
         this.ws?.close();
       }
     });
 
     this.ws!.send(JSON.stringify(connectRequest));
-  }
-
-  private setStatus(status: Agent['status']): void {
-    this.agent.status = status;
-    this.onStatusChange?.(this.agent.id, status);
   }
 
   private scheduleReconnect(): void {

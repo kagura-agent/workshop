@@ -24,8 +24,6 @@ function initSchema(): void {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       avatar TEXT,
-      gateway_url TEXT NOT NULL,
-      auth_token TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'offline'
     );
 

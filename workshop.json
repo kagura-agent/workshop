@@ -1,18 +1,16 @@
 {
+  "gateway": {
+    "url": "ws://localhost:18789",
+    "token": "25f126c40acf953d5f04c7ee0c708a24ff36879e324cd777"
+  },
   "agents": [
-    {
-      "id": "kagura",
-      "name": "Kagura",
-      "avatar": "🌸",
-      "gatewayUrl": "ws://localhost:18789",
-      "token": "25f126c40acf953d5f04c7ee0c708a24ff36879e324cd777"
-    }
+    { "id": "kagura", "name": "Kagura", "avatar": "🌸" },
+    { "id": "anan", "name": "Anan", "avatar": "🤖" },
+    { "id": "ruantang", "name": "Ruantang", "avatar": "🍮" }
   ],
   "rooms": [
-    {
-      "id": "product",
-      "name": "#product",
-      "agents": ["kagura"]
-    }
+    { "id": "product", "name": "#product", "agents": ["kagura", "anan"] },
+    { "id": "dev", "name": "#dev", "agents": ["kagura", "ruantang"] },
+    { "id": "war-room", "name": "#war-room", "agents": ["kagura", "anan", "ruantang"] }
   ]
 }
