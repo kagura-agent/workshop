@@ -1,27 +1,27 @@
 import { useState, useEffect } from 'react';
 import type { CreateChannelDialogProps } from '../types';
 
-export function CreateChannelDialog({ agents, onClose, onCreate, editRoom }: CreateChannelDialogProps) {
-  const isEdit = !!editRoom;
+export function CreateChannelDialog({ agents, onClose, onCreate, editChannel }: CreateChannelDialogProps) {
+  const isEdit = !!editChannel;
 
   const [name, setName] = useState(() => {
-    if (editRoom) return editRoom.name.replace(/^#/, '');
+    if (editChannel) return editChannel.name.replace(/^#/, '');
     return '';
   });
 
   const [selected, setSelected] = useState<Record<string, boolean>>(() => {
-    if (editRoom) {
+    if (editChannel) {
       const sel: Record<string, boolean> = {};
-      for (const a of editRoom.agents) sel[a.id] = true;
+      for (const a of editChannel.agents) sel[a.id] = true;
       return sel;
     }
     return {};
   });
 
   const [requireMention, setRequireMention] = useState<Record<string, boolean>>(() => {
-    if (editRoom) {
+    if (editChannel) {
       const rm: Record<string, boolean> = {};
-      for (const a of editRoom.agents) {
+      for (const a of editChannel.agents) {
         if (a.requireMention) rm[a.id] = true;
       }
       return rm;
@@ -57,7 +57,7 @@ export function CreateChannelDialog({ agents, onClose, onCreate, editRoom }: Cre
       .map(a => ({ id: a.id, requireMention: !!requireMention[a.id] }));
 
     if (isEdit) {
-      onCreate(editRoom!.name, agentConfigs);
+      onCreate(editChannel!.name, agentConfigs);
     } else {
       const trimmed = name.trim();
       if (!trimmed) return;

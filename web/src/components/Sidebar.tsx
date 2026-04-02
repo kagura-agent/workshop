@@ -1,38 +1,38 @@
 import { useState } from 'react';
 import { CreateChannelDialog } from './CreateChannelDialog';
-import type { Room, Agent } from '../types';
+import type { Channel, Agent } from '../types';
 
 interface SidebarProps {
-  rooms: Room[];
+  channels: Channel[];
   agents: Agent[];
-  activeRoomId: string | null;
-  onSelectRoom: (roomId: string) => void;
-  onCreateRoom: (name: string, agents: { id: string; requireMention: boolean }[]) => void;
+  activeChannelId: string | null;
+  onSelectChannel: (channelId: string) => void;
+  onCreateChannel: (name: string, agents: { id: string; requireMention: boolean }[]) => void;
 }
 
-export function Sidebar({ rooms, agents, activeRoomId, onSelectRoom, onCreateRoom }: SidebarProps) {
+export function Sidebar({ channels, agents, activeChannelId, onSelectChannel, onCreateChannel }: SidebarProps) {
   const [showDialog, setShowDialog] = useState(false);
 
   return (
     <div className="sidebar">
       <div className="sidebar-header">Workshop</div>
-      <div className="room-list">
-        <div className="room-list-header">
-          <span className="room-list-title">Rooms</span>
-          <button className="room-add-btn" onClick={() => setShowDialog(true)}>+</button>
+      <div className="channel-list">
+        <div className="channel-list-header">
+          <span className="channel-list-title">Channels</span>
+          <button className="channel-add-btn" onClick={() => setShowDialog(true)}>+</button>
         </div>
-        {rooms.length === 0 && (
+        {channels.length === 0 && (
           <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: 13 }}>
-            No rooms yet
+            No channels yet
           </div>
         )}
-        {rooms.map((room) => (
+        {channels.map((channel) => (
           <div
-            key={room.id}
-            className={`room-item ${room.id === activeRoomId ? 'active' : ''}`}
-            onClick={() => onSelectRoom(room.id)}
+            key={channel.id}
+            className={`channel-item ${channel.id === activeChannelId ? 'active' : ''}`}
+            onClick={() => onSelectChannel(channel.id)}
           >
-            {room.name}
+            {channel.name}
           </div>
         ))}
       </div>
@@ -41,7 +41,7 @@ export function Sidebar({ rooms, agents, activeRoomId, onSelectRoom, onCreateRoo
           agents={agents}
           onClose={() => setShowDialog(false)}
           onCreate={(name, agentConfigs) => {
-            onCreateRoom(name, agentConfigs);
+            onCreateChannel(name, agentConfigs);
             setShowDialog(false);
           }}
         />
