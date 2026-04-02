@@ -5,7 +5,7 @@ export interface Agent {
   status: 'online' | 'connecting' | 'offline';
 }
 
-export interface Room {
+export interface Channel {
   id: string;
   name: string;
   agents: string[];
@@ -16,7 +16,7 @@ export interface Room {
 
 export interface Message {
   id: string;
-  roomId: string;
+  channelId: string;
   senderId: string;
   senderName: string;
   role: 'user' | 'assistant';
@@ -26,27 +26,27 @@ export interface Message {
 
 // Messages from server
 export type ServerMessage =
-  | { type: 'message'; roomId: string; message: Message }
-  | { type: 'typing'; roomId: string; agentId: string; agentName: string }
-  | { type: 'room_list'; rooms: Room[] }
+  | { type: 'message'; channelId: string; message: Message }
+  | { type: 'typing'; channelId: string; agentId: string; agentName: string }
+  | { type: 'channel_list'; channels: Channel[] }
   | { type: 'agent_list'; agents: Agent[] }
-  | { type: 'room_created'; room: Room }
-  | { type: 'room_updated'; room: Room }
+  | { type: 'channel_created'; channel: Channel }
+  | { type: 'channel_updated'; channel: Channel }
   | { type: 'error'; message: string };
 
 // Messages from client → server
 export type ClientMessage =
-  | { type: 'send_message'; roomId: string; content: string }
-  | { type: 'create_room'; name: string; agents: { id: string; requireMention: boolean }[] }
-  | { type: 'update_room'; roomId: string; agents: { id: string; requireMention: boolean }[] }
-  | { type: 'list_rooms' }
+  | { type: 'send_message'; channelId: string; content: string }
+  | { type: 'create_channel'; name: string; agents: { id: string; requireMention: boolean }[] }
+  | { type: 'update_channel'; channelId: string; agents: { id: string; requireMention: boolean }[] }
+  | { type: 'list_channels' }
   | { type: 'list_agents' };
 
 export interface CreateChannelDialogProps {
   agents: Agent[];
   onClose: () => void;
   onCreate: (name: string, agents: { id: string; requireMention: boolean }[]) => void;
-  editRoom?: {
+  editChannel?: {
     id: string;
     name: string;
     agents: { id: string; requireMention: boolean }[];

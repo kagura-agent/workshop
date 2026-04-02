@@ -27,31 +27,31 @@ function initSchema(): void {
       status TEXT NOT NULL DEFAULT 'offline'
     );
 
-    CREATE TABLE IF NOT EXISTS rooms (
+    CREATE TABLE IF NOT EXISTS channels (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       status TEXT NOT NULL DEFAULT 'active'
     );
 
-    CREATE TABLE IF NOT EXISTS room_agents (
-      room_id TEXT NOT NULL,
+    CREATE TABLE IF NOT EXISTS channel_agents (
+      channel_id TEXT NOT NULL,
       agent_id TEXT NOT NULL,
       require_mention INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY (room_id, agent_id),
-      FOREIGN KEY (room_id) REFERENCES rooms(id),
+      PRIMARY KEY (channel_id, agent_id),
+      FOREIGN KEY (channel_id) REFERENCES channels(id),
       FOREIGN KEY (agent_id) REFERENCES agents(id)
     );
 
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
-      room_id TEXT NOT NULL,
+      channel_id TEXT NOT NULL,
       sender_id TEXT NOT NULL,
       sender_name TEXT NOT NULL,
       role TEXT NOT NULL,
       content TEXT NOT NULL,
       timestamp TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (room_id) REFERENCES rooms(id)
+      FOREIGN KEY (channel_id) REFERENCES channels(id)
     );
   `);
 }

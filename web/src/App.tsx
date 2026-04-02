@@ -4,60 +4,60 @@ import { ChatView } from './components/ChatView';
 import { AgentList } from './components/AgentList';
 import { CreateChannelDialog } from './components/CreateChannelDialog';
 import { useWebSocket } from './hooks/useWebSocket';
-import type { Room, Agent, Message, ServerMessage } from './types';
+import type { Channel, Agent, Message, ServerMessage } from './types';
 
 const WS_URL = `ws://${window.location.hostname}:3100`;
 
 export default function App() {
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const [channels, setChannels] = useState<Channel[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
   const [typing, setTyping] = useState<Record<string, Set<string>>>({});
-  const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
-  const [editingRoom, setEditingRoom] = useState<boolean>(false);
+  const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+  const [editingChannel, setEditingChannel] = useState<boolean>(false);
 
   const handleMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
-      case 'room_list':
-        setRooms(msg.rooms);
+      case 'channel_list':
+        setChannels(msg.channels);
         break;
       case 'agent_list':
         setAgents(msg.agents);
         break;
       case 'typing':
         setTyping((prev) => {
-          const room = new Set(prev[msg.roomId] || []);
-          room.add(msg.agentName);
-          return { ...prev, [msg.roomId]: room };
+          const channel = new Set(prev[msg.channelId] || []);
+          channel.add(msg.agentName);
+          return { ...prev, [msg.channelId]: channel };
         });
         // Auto-clear after 30s safety net
         setTimeout(() => {
           setTyping((prev) => {
-            const room = new Set(prev[msg.roomId] || []);
-            room.delete(msg.agentName);
-            return { ...prev, [msg.roomId]: room };
+            const channel = new Set(prev[msg.channelId] || []);
+            channel.delete(msg.agentName);
+            return { ...prev, [msg.channelId]: channel };
           });
         }, 30000);
         break;
       case 'message':
         setMessages((prev) => ({
           ...prev,
-          [msg.roomId]: [...(prev[msg.roomId] || []), msg.message],
+          [msg.channelId]: [...(prev[msg.channelId] || []), msg.message],
         }));
         // Clear typing for this agent when their message arrives
         if (msg.message.role === 'assistant') {
           setTyping((prev) => {
-            const room = new Set(prev[msg.roomId] || []);
-            room.delete(msg.message.senderName);
-            return { ...prev, [msg.roomId]: room };
+            const channel = new Set(prev[msg.channelId] || []);
+            channel.delete(msg.message.senderName);
+            return { ...prev, [msg.channelId]: channel };
           });
         }
         break;
-      case 'room_created':
-        setRooms((prev) => [...prev, msg.room]);
+      case 'channel_created':
+        setChannels((prev) => [...prev, msg.channel]);
         break;
-      case 'room_updated':
-        setRooms((prev) => prev.map((r) => r.id === msg.room.id ? msg.room : r));
+      case 'channel_updated':
+        setChannels((prev) => prev.map((c) => c.id === msg.channel.id ? msg.channel : c));
         break;
       case 'error':
         console.error('[workshop]', msg.message);
@@ -71,61 +71,61 @@ export default function App() {
   // (in a real app we'd do this on the 'open' event; good enough for scaffold)
 
   const handleSendMessage = (content: string) => {
-    if (!activeRoomId) return;
-    send({ type: 'send_message', roomId: activeRoomId, content });
+    if (!activeChannelId) return;
+    send({ type: 'send_message', channelId: activeChannelId, content });
   };
 
-  const handleCreateRoom = (name: string, agentConfigs: { id: string; requireMention: boolean }[]) => {
-    send({ type: 'create_room', name, agents: agentConfigs });
+  const handleCreateChannel = (name: string, agentConfigs: { id: string; requireMention: boolean }[]) => {
+    send({ type: 'create_channel', name, agents: agentConfigs });
   };
 
-  const handleUpdateRoom = (roomId: string, agentConfigs: { id: string; requireMention: boolean }[]) => {
-    send({ type: 'update_room', roomId, agents: agentConfigs });
+  const handleUpdateChannel = (channelId: string, agentConfigs: { id: string; requireMention: boolean }[]) => {
+    send({ type: 'update_channel', channelId, agents: agentConfigs });
   };
 
-  const handleEditRoom = () => {
-    if (!activeRoomId) return;
-    setEditingRoom(true);
+  const handleEditChannel = () => {
+    if (!activeChannelId) return;
+    setEditingChannel(true);
   };
 
-  const activeRoom = rooms.find((r) => r.id === activeRoomId);
-  const roomAgents = activeRoom
-    ? agents.filter(a => activeRoom.agents.includes(a.id))
+  const activeChannel = channels.find((c) => c.id === activeChannelId);
+  const channelAgents = activeChannel
+    ? agents.filter(a => activeChannel.agents.includes(a.id))
     : [];
-  const typingNames = activeRoomId
-    ? Array.from(typing[activeRoomId] || [])
+  const typingNames = activeChannelId
+    ? Array.from(typing[activeChannelId] || [])
     : [];
 
   return (
     <div className="app">
       <Sidebar
-        rooms={rooms}
+        channels={channels}
         agents={agents}
-        activeRoomId={activeRoomId}
-        onSelectRoom={setActiveRoomId}
-        onCreateRoom={handleCreateRoom}
+        activeChannelId={activeChannelId}
+        onSelectChannel={setActiveChannelId}
+        onCreateChannel={handleCreateChannel}
       />
       <ChatView
-        roomName={activeRoom?.name ?? null}
-        messages={activeRoomId ? (messages[activeRoomId] || []) : []}
-        roomAgents={roomAgents}
+        channelName={activeChannel?.name ?? null}
+        messages={activeChannelId ? (messages[activeChannelId] || []) : []}
+        channelAgents={channelAgents}
         typingNames={typingNames}
         onSendMessage={handleSendMessage}
-        onEditRoom={activeRoom ? handleEditRoom : undefined}
+        onEditChannel={activeChannel ? handleEditChannel : undefined}
       />
       <AgentList agents={agents} />
-      {editingRoom && activeRoom && (
+      {editingChannel && activeChannel && (
         <CreateChannelDialog
           agents={agents}
-          onClose={() => setEditingRoom(false)}
+          onClose={() => setEditingChannel(false)}
           onCreate={(_name, agentConfigs) => {
-            handleUpdateRoom(activeRoom.id, agentConfigs);
-            setEditingRoom(false);
+            handleUpdateChannel(activeChannel.id, agentConfigs);
+            setEditingChannel(false);
           }}
-          editRoom={{
-            id: activeRoom.id,
-            name: activeRoom.name,
-            agents: activeRoom.agentConfigs ?? activeRoom.agents.map(id => ({ id, requireMention: false })),
+          editChannel={{
+            id: activeChannel.id,
+            name: activeChannel.name,
+            agents: activeChannel.agentConfigs ?? activeChannel.agents.map(id => ({ id, requireMention: false })),
           }}
         />
       )}

@@ -4,8 +4,8 @@ import { v4 as uuid } from 'uuid';
 /**
  * GatewayConnection — single shared WebSocket connection to OpenClaw Gateway.
  *
- * All agents share this connection. Each agent+room combination gets its own
- * session key: `agent:{agentId}:workshop:{roomId}`.
+ * All agents share this connection. Each agent+channel combination gets its own
+ * session key: `agent:{agentId}:workshop:{channelId}`.
  *
  * Implements the OpenClaw Gateway challenge-response auth protocol:
  * 1. Open WS (no auth headers)
@@ -25,10 +25,10 @@ export class GatewayConnection {
   /** Track which sessions have already fired a typing event (reset on final). */
   private typingFired = new Set<string>();
 
-  /** Callback for incoming agent messages. agentId + roomId parsed from sessionKey. */
-  onMessage?: (agentId: string, roomId: string, content: string) => void;
+  /** Callback for incoming agent messages. agentId + channelId parsed from sessionKey. */
+  onMessage?: (agentId: string, channelId: string, content: string) => void;
   /** Callback for first delta — signals agent started typing. */
-  onTyping?: (agentId: string, roomId: string) => void;
+  onTyping?: (agentId: string, channelId: string) => void;
   onStatusChange?: (status: 'online' | 'connecting' | 'offline') => void;
 
   constructor(gatewayUrl: string, authToken: string) {
@@ -73,10 +73,10 @@ export class GatewayConnection {
   }
 
   /**
-   * Send a chat message to a specific agent in a specific room.
-   * Session key format: agent:{agentId}:workshop:{roomId}
+   * Send a chat message to a specific agent in a specific channel.
+   * Session key format: agent:{agentId}:workshop:{channelId}
    */
-  sendChat(content: string, roomId: string, agentId: string): void {
+  sendChat(content: string, channelId: string, agentId: string): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.connected) {
       console.warn(`[gateway] cannot send: not connected`);
       return;
@@ -85,7 +85,7 @@ export class GatewayConnection {
     const id = uuid();
     const idempotencyKey = uuid();
     // Gateway internally prefixes session keys, so we send without the agent prefix
-    const sessionKey = `agent:${agentId}:workshop:${roomId}`;
+    const sessionKey = `agent:${agentId}:workshop:${channelId}`;
 
     // Track this session key so we only process events from our own sessions
     this.ownSessionKeys.add(sessionKey);
@@ -103,12 +103,12 @@ export class GatewayConnection {
 
     this.pendingCallbacks.set(id, (resp: any) => {
       if (!resp.ok) {
-        console.error(`[gateway] chat.send rejected for agent=${agentId} room=${roomId}:`, resp.error?.message ?? resp);
+        console.error(`[gateway] chat.send rejected for agent=${agentId} channel=${channelId}:`, resp.error?.message ?? resp);
       }
     });
 
     this.ws.send(JSON.stringify(frame));
-    console.log(`[gateway] → chat.send agent=${agentId} room=${roomId} session=${sessionKey}: "${content.slice(0, 80)}"`);
+    console.log(`[gateway] → chat.send agent=${agentId} channel=${channelId} session=${sessionKey}: "${content.slice(0, 80)}"`);
   }
 
   disconnect(): void {
@@ -183,8 +183,8 @@ export class GatewayConnection {
   }
 
   /**
-   * Handle chat events. Parse agentId and roomId from sessionKey.
-   * Format: agent:{agentId}:workshop:{roomId}
+   * Handle chat events. Parse agentId and channelId from sessionKey.
+   * Format: agent:{agentId}:workshop:{channelId}
    */
   private handleChatEvent(payload: any): void {
     if (!payload) return;
@@ -192,37 +192,37 @@ export class GatewayConnection {
     const state = payload.state;
     const sessionKey = payload.sessionKey as string | undefined;
 
-    // Parse agentId and roomId from sessionKey
+    // Parse agentId and channelId from sessionKey
     const parsed = this.parseSessionKey(sessionKey);
     if (!parsed) return;
 
-    const { agentId, roomId } = parsed;
+    const { agentId, channelId } = parsed;
 
     switch (state) {
       case 'delta': {
         // Fire typing callback once per response (not on every delta)
-        const key = `${agentId}:${roomId}`;
+        const key = `${agentId}:${channelId}`;
         if (!this.typingFired.has(key)) {
           this.typingFired.add(key);
-          this.onTyping?.(agentId, roomId);
+          this.onTyping?.(agentId, channelId);
         }
         break;
       }
 
       case 'final': {
-        // Clear typing state for this agent+room
-        this.typingFired.delete(`${agentId}:${roomId}`);
+        // Clear typing state for this agent+channel
+        this.typingFired.delete(`${agentId}:${channelId}`);
         const message = payload.message;
         const text = this.extractChatText(message);
         if (text) {
-          console.log(`[gateway] ← chat final agent=${agentId} room=${roomId}: "${text.slice(0, 120)}${text.length > 120 ? '...' : ''}"`);
-          this.onMessage?.(agentId, roomId, text);
+          console.log(`[gateway] ← chat final agent=${agentId} channel=${channelId}: "${text.slice(0, 120)}${text.length > 120 ? '...' : ''}"`);
+          this.onMessage?.(agentId, channelId, text);
         }
         break;
       }
 
       case 'error':
-        console.error(`[gateway] chat error agent=${agentId} room=${roomId}:`, payload.errorMessage ?? 'Unknown');
+        console.error(`[gateway] chat error agent=${agentId} channel=${channelId}:`, payload.errorMessage ?? 'Unknown');
         break;
 
       default:
@@ -231,13 +231,13 @@ export class GatewayConnection {
   }
 
   /**
-   * Parse session key format: agent:{agentId}:workshop:{roomId}
+   * Parse session key format: agent:{agentId}:workshop:{channelId}
    */
-  private parseSessionKey(sessionKey: string | undefined): { agentId: string; roomId: string } | null {
+  private parseSessionKey(sessionKey: string | undefined): { agentId: string; channelId: string } | null {
     if (!sessionKey) return null;
     const match = sessionKey.match(/^agent:([^:]+):workshop:([^:]+)$/);
     if (!match) return null;
-    return { agentId: match[1], roomId: match[2] };
+    return { agentId: match[1], channelId: match[2] };
   }
 
   private extractChatText(message: any): string {

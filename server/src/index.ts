@@ -42,31 +42,31 @@ try {
     }
   }
 
-  // Create rooms
-  if (Array.isArray(config.rooms)) {
-    for (const r of config.rooms) {
+  // Create channels
+  if (Array.isArray(config.channels)) {
+    for (const c of config.channels) {
       const now = new Date().toISOString();
       db.prepare(
-        `INSERT OR IGNORE INTO rooms (id, name, created_at, status)
+        `INSERT OR IGNORE INTO channels (id, name, created_at, status)
          VALUES (?, ?, ?, 'active')`
-      ).run(r.id, r.name, now);
+      ).run(c.id, c.name, now);
 
-      if (Array.isArray(r.agents)) {
-        for (const entry of r.agents) {
+      if (Array.isArray(c.agents)) {
+        for (const entry of c.agents) {
           // Support both string ("kagura") and object ({ id: "kagura", requireMention: true })
           const agentId = typeof entry === 'string' ? entry : entry.id;
           const requireMention = typeof entry === 'string' ? false : !!entry.requireMention;
 
           db.prepare(
-            `INSERT OR IGNORE INTO room_agents (room_id, agent_id, require_mention) VALUES (?, ?, ?)`
-          ).run(r.id, agentId, requireMention ? 1 : 0);
+            `INSERT OR IGNORE INTO channel_agents (channel_id, agent_id, require_mention) VALUES (?, ?, ?)`
+          ).run(c.id, agentId, requireMention ? 1 : 0);
         }
       }
 
-      const agentIds = Array.isArray(r.agents)
-        ? r.agents.map((e: any) => typeof e === 'string' ? e : e.id)
+      const agentIds = Array.isArray(c.agents)
+        ? c.agents.map((e: any) => typeof e === 'string' ? e : e.id)
         : [];
-      console.log(`[workshop] created room: ${r.name} (${r.id}) with agents: ${agentIds.join(', ')}`);
+      console.log(`[workshop] created channel: ${c.name} (${c.id}) with agents: ${agentIds.join(', ')}`);
     }
   }
 

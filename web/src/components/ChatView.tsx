@@ -2,15 +2,15 @@ import { useState, useRef, useEffect } from 'react';
 import type { Agent, Message } from '../types';
 
 interface ChatViewProps {
-  roomName: string | null;
+  channelName: string | null;
   messages: Message[];
-  roomAgents: Agent[];
+  channelAgents: Agent[];
   typingNames: string[];
   onSendMessage: (content: string) => void;
-  onEditRoom?: () => void;
+  onEditChannel?: () => void;
 }
 
-export function ChatView({ roomName, messages, roomAgents, typingNames, onSendMessage, onEditRoom }: ChatViewProps) {
+export function ChatView({ channelName, messages, channelAgents, typingNames, onSendMessage, onEditChannel }: ChatViewProps) {
   const [input, setInput] = useState('');
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -27,7 +27,7 @@ export function ChatView({ roomName, messages, roomAgents, typingNames, onSendMe
 
   // Filter agents matching mention query
   const mentionCandidates = mentionQuery !== null
-    ? roomAgents.filter(a =>
+    ? channelAgents.filter(a =>
         a.name.toLowerCase().includes(mentionQuery.toLowerCase()) ||
         a.id.toLowerCase().includes(mentionQuery.toLowerCase())
       )
@@ -94,10 +94,10 @@ export function ChatView({ roomName, messages, roomAgents, typingNames, onSendMe
     setMentionQuery(null);
   };
 
-  if (!roomName) {
+  if (!channelName) {
     return (
       <div className="chat-view">
-        <div className="empty-state">Select a room to start chatting</div>
+        <div className="empty-state">Select a channel to start chatting</div>
       </div>
     );
   }
@@ -113,9 +113,9 @@ export function ChatView({ roomName, messages, roomAgents, typingNames, onSendMe
   return (
     <div className="chat-view">
       <div className="chat-header">
-        <span>{roomName}</span>
-        {onEditRoom && (
-          <button className="chat-header-edit" onClick={onEditRoom} title="Edit channel members">
+        <span>{channelName}</span>
+        {onEditChannel && (
+          <button className="chat-header-edit" onClick={onEditChannel} title="Edit channel members">
             ⚙️
           </button>
         )}
@@ -173,7 +173,7 @@ export function ChatView({ roomName, messages, roomAgents, typingNames, onSendMe
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder={`Message ${roomName} — type @ to mention`}
+            placeholder={`Message ${channelName} — type @ to mention`}
           />
         </div>
       </form>

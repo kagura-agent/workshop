@@ -12,7 +12,7 @@
     { "id": "pm", "name": "PM", "avatar": "📋" },
     { "id": "tester", "name": "Tester", "avatar": "🧪" }
   ],
-  "rooms": [
+  "channels": [
     { "id": "general", "name": "#general", "agents": [
       { "id": "kagura", "requireMention": false },
       { "id": "anan", "requireMention": true },
