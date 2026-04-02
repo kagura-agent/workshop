@@ -52,12 +52,10 @@ export class Router {
     gw.onMessage = (agentId: string, roomId: string, content: string) => {
       if (!content) return;
 
-      // Filter silent reply tokens — these are not real messages
+      // Filter OpenClaw protocol tokens — these are not real messages
       const trimmed = content.trim();
-      const silent = trimmed === 'NO_REPLY' || trimmed === 'HEARTBEAT_OK' 
-        || trimmed === 'NO' || trimmed.startsWith('NO_REPLY');
-      if (silent) {
-        console.log(`[msg] agent=${agentId} room=${roomId} silent ("${trimmed.slice(0, 20)}"), not broadcasting`);
+      if (trimmed === 'NO_REPLY' || trimmed === 'HEARTBEAT_OK') {
+        console.log(`[msg] agent=${agentId} room=${roomId} silent (${trimmed}), not broadcasting`);
         return;
       }
 
