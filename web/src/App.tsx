@@ -70,6 +70,10 @@ export default function App() {
     send({ type: 'send_message', roomId: activeRoomId, content });
   };
 
+  const handleCreateRoom = (name: string, agentConfigs: { id: string; requireMention: boolean }[]) => {
+    send({ type: 'create_room', name, agents: agentConfigs });
+  };
+
   const activeRoom = rooms.find((r) => r.id === activeRoomId);
   const roomAgents = activeRoom
     ? agents.filter(a => activeRoom.agents.includes(a.id))
@@ -82,8 +86,10 @@ export default function App() {
     <div className="app">
       <Sidebar
         rooms={rooms}
+        agents={agents}
         activeRoomId={activeRoomId}
         onSelectRoom={setActiveRoomId}
+        onCreateRoom={handleCreateRoom}
       />
       <ChatView
         roomName={activeRoom?.name ?? null}

@@ -32,7 +32,7 @@ export interface Message {
 export type ClientMessage =
   | { type: 'send_message'; roomId: string; content: string }
   | { type: 'join_room'; roomId: string }
-  | { type: 'create_room'; name: string; agentIds: string[] }
+  | { type: 'create_room'; name: string; agents: { id: string; requireMention: boolean }[] }
   | { type: 'list_rooms' }
   | { type: 'list_agents' };
 

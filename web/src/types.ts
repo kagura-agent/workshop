@@ -31,3 +31,16 @@ export type ServerMessage =
   | { type: 'agent_list'; agents: Agent[] }
   | { type: 'room_created'; room: Room }
   | { type: 'error'; message: string };
+
+// Messages from client → server
+export type ClientMessage =
+  | { type: 'send_message'; roomId: string; content: string }
+  | { type: 'create_room'; name: string; agents: { id: string; requireMention: boolean }[] }
+  | { type: 'list_rooms' }
+  | { type: 'list_agents' };
+
+export interface CreateChannelDialogProps {
+  agents: Agent[];
+  onClose: () => void;
+  onCreate: (name: string, agents: { id: string; requireMention: boolean }[]) => void;
+}
