@@ -52,14 +52,21 @@ try {
       ).run(r.id, r.name, now);
 
       if (Array.isArray(r.agents)) {
-        for (const agentId of r.agents) {
+        for (const entry of r.agents) {
+          // Support both string ("kagura") and object ({ id: "kagura", requireMention: true })
+          const agentId = typeof entry === 'string' ? entry : entry.id;
+          const requireMention = typeof entry === 'string' ? false : !!entry.requireMention;
+
           db.prepare(
-            `INSERT OR IGNORE INTO room_agents (room_id, agent_id) VALUES (?, ?)`
-          ).run(r.id, agentId);
+            `INSERT OR IGNORE INTO room_agents (room_id, agent_id, require_mention) VALUES (?, ?, ?)`
+          ).run(r.id, agentId, requireMention ? 1 : 0);
         }
       }
 
-      console.log(`[workshop] created room: ${r.name} (${r.id}) with agents: ${r.agents?.join(', ')}`);
+      const agentIds = Array.isArray(r.agents)
+        ? r.agents.map((e: any) => typeof e === 'string' ? e : e.id)
+        : [];
+      console.log(`[workshop] created room: ${r.name} (${r.id}) with agents: ${agentIds.join(', ')}`);
     }
   }
 

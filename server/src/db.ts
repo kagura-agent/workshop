@@ -37,6 +37,7 @@ function initSchema(): void {
     CREATE TABLE IF NOT EXISTS room_agents (
       room_id TEXT NOT NULL,
       agent_id TEXT NOT NULL,
+      require_mention INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (room_id, agent_id),
       FOREIGN KEY (room_id) REFERENCES rooms(id),
       FOREIGN KEY (agent_id) REFERENCES agents(id)

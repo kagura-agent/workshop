@@ -5,6 +5,11 @@ export interface Agent {
   status: 'online' | 'connecting' | 'offline';
 }
 
+export interface RoomAgent {
+  id: string;
+  requireMention: boolean;
+}
+
 export interface Room {
   id: string;
   name: string;

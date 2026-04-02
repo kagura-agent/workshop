@@ -104,14 +104,36 @@ export class Router {
       return;
     }
 
-    // Forward to EACH agent in the room via separate chat.send calls
+    // Parse @mentions from message (case-insensitive)
+    const mentionPattern = /@(\w[\w-]*)/g;
+    const mentions = new Set<string>();
+    let match: RegExpExecArray | null;
+    while ((match = mentionPattern.exec(content)) !== null) {
+      mentions.add(match[1].toLowerCase());
+    }
+
+    // Forward to agents based on requireMention rules
     const db = getDb();
     const roomAgents = db.prepare(
-      'SELECT agent_id FROM room_agents WHERE room_id = ?'
-    ).all(roomId) as { agent_id: string }[];
+      'SELECT agent_id, require_mention FROM room_agents WHERE room_id = ?'
+    ).all(roomId) as { agent_id: string; require_mention: number }[];
 
-    for (const { agent_id } of roomAgents) {
-      console.log(`[msg] forwarding to agent=${agent_id} room=${roomId}`);
+    for (const { agent_id, require_mention } of roomAgents) {
+      const agent = this.agents.get(agent_id);
+      const agentName = agent?.name?.toLowerCase() ?? '';
+
+      if (require_mention) {
+        // Only send if agent is @mentioned by id or name
+        const mentioned = mentions.has(agent_id.toLowerCase()) || mentions.has(agentName);
+        if (!mentioned) {
+          console.log(`[msg] skipping agent=${agent_id} room=${roomId} (requireMention=true, not mentioned)`);
+          continue;
+        }
+        console.log(`[msg] forwarding to agent=${agent_id} room=${roomId} (mentioned)`);
+      } else {
+        console.log(`[msg] forwarding to agent=${agent_id} room=${roomId} (requireMention=false, always receives)`);
+      }
+
       this.gateway.sendChat(content, roomId, agent_id);
     }
   }

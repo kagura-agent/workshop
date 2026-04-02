@@ -9,8 +9,18 @@
     { "id": "ruantang", "name": "Ruantang", "avatar": "🍮" }
   ],
   "rooms": [
-    { "id": "product", "name": "#product", "agents": ["kagura", "anan"] },
-    { "id": "dev", "name": "#dev", "agents": ["kagura", "ruantang"] },
-    { "id": "war-room", "name": "#war-room", "agents": ["kagura", "anan", "ruantang"] }
+    { "id": "product", "name": "#product", "agents": [
+      { "id": "kagura", "requireMention": false },
+      { "id": "anan", "requireMention": true }
+    ]},
+    { "id": "dev", "name": "#dev", "agents": [
+      { "id": "kagura", "requireMention": false },
+      { "id": "ruantang", "requireMention": true }
+    ]},
+    { "id": "war-room", "name": "#war-room", "agents": [
+      { "id": "kagura", "requireMention": false },
+      { "id": "anan", "requireMention": true },
+      { "id": "ruantang", "requireMention": true }
+    ]}
   ]
 }
