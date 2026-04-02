@@ -21,6 +21,9 @@
       { "id": "kagura", "requireMention": false },
       { "id": "anan", "requireMention": true },
       { "id": "ruantang", "requireMention": true }
+    ]},
+    { "id": "workshop-dev", "name": "#workshop-dev", "agents": [
+      { "id": "kagura", "requireMention": false }
     ]}
   ]
 }
