@@ -12,14 +12,12 @@ check_port() {
 
 start_server() {
   echo "[supervise] starting server on :3100"
-  cd "$DIR" && node server/dist/index.js >> "$SERVER_LOG" 2>&1 &
-  disown
+  cd "$DIR" && setsid node server/dist/index.js >> "$SERVER_LOG" 2>&1 &
 }
 
 start_web() {
   echo "[supervise] starting vite on :5173"
-  cd "$DIR/web" && npx vite --host 0.0.0.0 >> "$WEB_LOG" 2>&1 &
-  disown
+  cd "$DIR/web" && setsid npx vite --host 0.0.0.0 >> "$WEB_LOG" 2>&1 &
 }
 
 # Initial start
