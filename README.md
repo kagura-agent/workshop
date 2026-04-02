@@ -1,93 +1,80 @@
 # Workshop
 
-Multi-agent team orchestration — chat-native, human-visible, intervention-ready.
+A space where humans and AI agent teams work together — in the open.
 
 ## The Problem
 
-You want a team of AI agents working together. Current options:
+You have an AI agent. It's helpful. But:
 
-| Approach | Orchestration | Visibility | Human Intervention |
-|----------|:---:|:---:|:---:|
-| CrewAI / LangGraph | ✅ | Dashboard only | ❌ Not in real-time |
-| Discord + OpenClaw | ❌ Manual | ✅ Channels/threads | ✅ Just type |
-| Single agent + subagents | ✅ Built-in | ❌ Invisible | ❌ Can't reach them |
+- **You can't see it work.** It goes off, does things, comes back with results. The middle is a black box.
+- **You can't intervene.** If it's going the wrong direction, you find out after it's done.
+- **Nobody else can see it.** Your agent's work is invisible to your team, your community, everyone.
 
-**No existing product gives you all three.**
+You try Discord — channels give you visibility, threads let you intervene, and it's public. But Discord wasn't built for agents: config changes kill sessions, there's no task lifecycle, no cross-channel notifications.
 
-## What Workshop Does
+You try orchestration frameworks (CrewAI, LangGraph) — they handle coordination, but the human interface is a dashboard, not a conversation.
 
-Workshop is an orchestration layer that sits between your chat platform (Discord, Slack, Feishu) and your AI agents (OpenClaw, Claude Code, etc.).
+**Nothing gives you all four: chat, space, orchestration, and openness.**
 
-It provides:
+## What Workshop Is
 
-1. **Automatic task dispatch** — Tell your product agent "go build this", it creates a workspace, assembles the right team, and kicks things off
-2. **Real-time visibility** — Every task runs in a visible channel/thread. You can watch agents work in real-time
-3. **Human intervention** — Walk into any task workspace and talk. Change direction, give feedback, approve decisions. Agents hear you immediately
-4. **Task lifecycle** — Tasks have states (created → in-progress → review → done). Completion notifications flow back to the originator automatically
-5. **Cross-agent communication** — Agents can notify each other across task boundaries without shared session state
+Workshop is a product — not a plugin, not a framework. It's the place where you talk to your agent team and watch them work.
 
-## Architecture
+Four pillars:
+
+1. **Chat** — Talk to your agents naturally, like messaging a colleague
+2. **Space** — Every task gets its own room. Walk in, look around, say something
+3. **Orchestration** — Tasks flow automatically: created → assigned → in-progress → review → done. Agents notify each other. You don't have to check.
+4. **Openness** — Work happens in the open by default. Your team, your community, anyone can watch your agents build things in real-time
+
+## How It Works
 
 ```
-┌─────────────────────────────────────────────┐
-│                  Chat Platform               │
-│        (Discord / Slack / Feishu)            │
-│                                              │
-│  #product ──── #task-001 ──── #task-002      │
-│  (Luna +       (leader +      (leader +      │
-│   luna-agent)   dev + pm)      tester)       │
-│                  └─ thread      └─ thread    │
-│                    (ACP code)    (test logs)  │
-└──────────────┬──────────────────────────────┘
-               │
-     ┌─────────▼──────────┐
-     │    Workshop Core    │
-     │                     │
-     │  • Task Registry    │  ← tracks task lifecycle across channels
-     │  • Channel Manager  │  ← creates/configures channels without reload
-     │  • Message Router   │  ← cross-session notifications
-     │  • Team Templates   │  ← predefined team compositions
-     │  • Event Bus        │  ← task state changes → notify subscribers
-     └─────────┬──────────┘
-               │
-     ┌─────────▼──────────┐
-     │   Agent Instances   │
-     │                     │
-     │  • luna-agent       │  (product + dispatch)
-     │  • leader-agent     │  (coordination)
-     │  • dev-agent        │  (implementation)
-     │  • pm-agent         │  (requirements)
-     │  • tester-agent     │  (quality)
-     └────────────────────┘
+┌──────────────────────────────────────────┐
+│              Workshop                     │
+│                                          │
+│  💬 Product Room                         │
+│  Luna + product-agent                    │
+│  "Let's build a dark mode feature"       │
+│           │                              │
+│           ▼  "Go ahead, build it"        │
+│  🔨 Task: dark-mode                      │
+│  ├── leader-agent (coordinates)          │
+│  ├── dev-agent → thread: coding...       │
+│  ├── pm-agent (spec review)              │
+│  └── tester-agent (QA)                   │
+│           │                              │
+│           ▼  ✅ Done                     │
+│  💬 Product Room                         │
+│  "Dark mode shipped. Here's the PR."     │
+│                                          │
+│  👀 Anyone can watch any room            │
+└──────────────────────────────────────────┘
 ```
 
-## Core Concepts
+You talk to one agent. It dispatches to a team. The team works in visible rooms. You can walk into any room anytime. When they're done, you get notified. And the whole thing is open for anyone to watch.
 
-### Task
-A unit of work with a lifecycle: `created → assigned → in-progress → review → done | cancelled`. Each task gets a dedicated channel. Completion triggers a notification back to the originating channel.
+## Why Not Just Use…
 
-### Team Template
-A predefined set of agent roles for a type of work. E.g., "feature-dev" = leader + pm + dev + tester. Templates can be customized per project.
-
-### Workspace
-A channel (or set of channels/threads) dedicated to a task. Created automatically, archived on completion. The human can enter any workspace at any time.
-
-### Message Router
-The bridge between isolated agent sessions. Agents publish events ("task complete", "review needed", "blocked on X"), the router delivers them to subscribed sessions.
+| Platform | Chat | Space | Orchestration | Openness |
+|----------|:---:|:---:|:---:|:---:|
+| Feishu / WhatsApp | ✅ | ❌ Single stream | ❌ | ❌ Private |
+| Discord + bots | ✅ | ✅ Channels | ❌ Breaks on reload | ✅ |
+| CrewAI / LangGraph | ❌ Dashboard | ❌ | ✅ | ❌ |
+| Single agent (OpenClaw) | ✅ | ❌ | ✅ Subagents | ❌ Invisible |
+| **Workshop** | **✅** | **✅** | **✅** | **✅** |
 
 ## Status
 
-🚧 **Early exploration.** We're building this for ourselves (dogfooding), documenting as we go.
+🚧 **Day 0.** Born from dogfooding — we're building this because we need it.
 
 ## Origin
 
-Born from a real problem: Luna set up a multi-agent team on Discord using OpenClaw, and hit two walls:
-1. Creating a new channel requires config reload, which kills the dispatcher agent's session
-2. Task agents can't notify back to the originating channel when done
+Luna (human) and Kagura (AI agent) have been working together on Feishu for weeks. It works, but Luna can't see what Kagura does behind the scenes. She tried Discord — set up a multi-agent team with channels and threads. Visibility was great, but Discord wasn't built for agents: config changes kill sessions, task channels can't notify back, and the whole thing is held together with duct tape.
 
-These aren't Discord problems or OpenClaw problems — they're **multi-agent orchestration problems** that no existing product solves well.
+No existing product solves this. So we're building one.
 
-Upstream issues filed:
+Related upstream issues:
 - [openclaw#59372](https://github.com/openclaw/openclaw/issues/59372) — Graceful config reload
 - [openclaw#59375](https://github.com/openclaw/openclaw/issues/59375) — Cross-session task notification
 
