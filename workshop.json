@@ -6,7 +6,11 @@
   "agents": [
     { "id": "kagura", "name": "Kagura", "avatar": "🌸" },
     { "id": "anan", "name": "Anan", "avatar": "🤖" },
-    { "id": "ruantang", "name": "Ruantang", "avatar": "🍮" }
+    { "id": "ruantang", "name": "Ruantang", "avatar": "🍮" },
+    { "id": "leader", "name": "Leader", "avatar": "🎯" },
+    { "id": "dev", "name": "Dev", "avatar": "🛠️" },
+    { "id": "pm", "name": "PM", "avatar": "📋" },
+    { "id": "tester", "name": "Tester", "avatar": "🧪" }
   ],
   "rooms": [
     { "id": "general", "name": "#general", "agents": [
@@ -15,7 +19,11 @@
       { "id": "ruantang", "requireMention": true }
     ]},
     { "id": "workshop", "name": "#workshop", "agents": [
-      { "id": "kagura", "requireMention": false }
+      { "id": "kagura", "requireMention": false },
+      { "id": "leader", "requireMention": true },
+      { "id": "dev", "requireMention": true },
+      { "id": "pm", "requireMention": true },
+      { "id": "tester", "requireMention": true }
     ]}
   ]
 }

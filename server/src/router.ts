@@ -99,7 +99,7 @@ export class Router {
         this.handleListAgents(ws);
         break;
       case 'create_room':
-        this.handleCreateRoom(ws, msg.name, msg.agentIds);
+        this.handleCreateRoom(ws, msg.name, msg.agents);
         break;
       default:
         this.sendTo(ws, { type: 'error', message: 'Unknown message type' });
@@ -185,19 +185,22 @@ export class Router {
     this.sendTo(ws, { type: 'agent_list', agents });
   }
 
-  private handleCreateRoom(ws: WebSocket, name: string, agentIds: string[]): void {
+  private handleCreateRoom(_ws: WebSocket, name: string, agents: { id: string; requireMention: boolean }[]): void {
     const db = getDb();
-    const id = uuid();
+    const id = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     const now = new Date().toISOString();
 
     db.prepare('INSERT INTO rooms (id, name, created_at) VALUES (?, ?, ?)').run(id, name, now);
 
-    for (const agentId of agentIds) {
-      db.prepare('INSERT OR IGNORE INTO room_agents (room_id, agent_id) VALUES (?, ?)').run(id, agentId);
+    for (const agent of agents) {
+      db.prepare(
+        'INSERT OR IGNORE INTO room_agents (room_id, agent_id, require_mention) VALUES (?, ?, ?)'
+      ).run(id, agent.id, agent.requireMention ? 1 : 0);
     }
 
+    const agentIds = agents.map(a => a.id);
     const room: Room = { id, name, agents: agentIds, createdAt: now, status: 'active' };
-    this.sendTo(ws, { type: 'room_created', room });
+    this.broadcast({ type: 'room_created', room });
   }
 
   private sendAllRoomHistory(ws: WebSocket): void {
