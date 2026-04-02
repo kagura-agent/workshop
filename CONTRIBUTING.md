@@ -27,14 +27,17 @@ workshop/
 cd server && npm install
 cd ../web && npm install
 
-# Start server (terminal 1)
-cd workshop/server && npx tsc && node dist/index.js
+# Compile server
+cd server && npx tsc
 
-# Start frontend (terminal 2)
-cd workshop/web && npx vite --host 0.0.0.0
+# Start everything (recommended — auto-restarts on crash)
+./scripts/supervise.sh
 
 # Open http://localhost:5173
 ```
+
+⚠️ **Do NOT start services with plain `&` or `disown` from exec sessions.**
+Use `setsid` or the supervisor script. See README for details.
 
 ## Build & Run
 
@@ -84,9 +87,32 @@ Example: `console.log(\`[gateway] ← chat final from \${agent.name}: "\${text.s
 ## Git Workflow
 
 ### Branches
-- `main` — stable, deployable
-- Feature branches: `feat/<name>`, `fix/<name>`
-- For now (solo dev), direct commits to `main` are OK for small changes
+- `main` — stable, deployable. **No direct pushes.**
+- Feature branches: `feat/<name>`, `fix/<name>`, `docs/<name>`
+
+### Pull Request Flow
+All changes go through PRs:
+
+```bash
+# 1. Create branch from issue
+git checkout -b fix/issue-2-setsid
+
+# 2. Make changes, commit
+git add -A && git commit -m "fix: use setsid to prevent exec session cleanup kills"
+
+# 3. Push and create PR — use "Fixes #N" to auto-close issue on merge
+git push -u origin fix/issue-2-setsid
+gh pr create --title "fix: use setsid for process supervisor" --body "Fixes #2"
+
+# 4. Merge (squash preferred for clean history)
+gh pr merge --squash
+```
+
+**Why?** Even for solo dev:
+- Every issue has a traceable PR
+- `Fixes #N` auto-closes issues on merge
+- PR history = changelog
+- Ready for contributors from day one
 
 ### Commit Messages
 Format: `<type>: <description>`
