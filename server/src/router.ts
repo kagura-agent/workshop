@@ -49,6 +49,12 @@ export class Router {
   initGateway(gatewayUrl: string, authToken: string): void {
     const gw = new GatewayConnection(gatewayUrl, authToken);
 
+    gw.onTyping = (agentId: string, roomId: string) => {
+      const agent = this.agents.get(agentId);
+      const agentName = agent?.name ?? agentId;
+      this.broadcast({ type: 'typing', roomId, agentId, agentName });
+    };
+
     gw.onMessage = (agentId: string, roomId: string, content: string) => {
       if (!content) return;
 

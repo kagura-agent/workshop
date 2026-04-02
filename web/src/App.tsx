@@ -11,6 +11,7 @@ export default function App() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
+  const [typing, setTyping] = useState<Record<string, Set<string>>>({});
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
 
   const handleMessage = useCallback((msg: ServerMessage) => {
@@ -21,11 +22,34 @@ export default function App() {
       case 'agent_list':
         setAgents(msg.agents);
         break;
+      case 'typing':
+        setTyping((prev) => {
+          const room = new Set(prev[msg.roomId] || []);
+          room.add(msg.agentName);
+          return { ...prev, [msg.roomId]: room };
+        });
+        // Auto-clear after 30s safety net
+        setTimeout(() => {
+          setTyping((prev) => {
+            const room = new Set(prev[msg.roomId] || []);
+            room.delete(msg.agentName);
+            return { ...prev, [msg.roomId]: room };
+          });
+        }, 30000);
+        break;
       case 'message':
         setMessages((prev) => ({
           ...prev,
           [msg.roomId]: [...(prev[msg.roomId] || []), msg.message],
         }));
+        // Clear typing for this agent when their message arrives
+        if (msg.message.role === 'assistant') {
+          setTyping((prev) => {
+            const room = new Set(prev[msg.roomId] || []);
+            room.delete(msg.message.senderName);
+            return { ...prev, [msg.roomId]: room };
+          });
+        }
         break;
       case 'room_created':
         setRooms((prev) => [...prev, msg.room]);
@@ -50,6 +74,9 @@ export default function App() {
   const roomAgents = activeRoom
     ? agents.filter(a => activeRoom.agents.includes(a.id))
     : [];
+  const typingNames = activeRoomId
+    ? Array.from(typing[activeRoomId] || [])
+    : [];
 
   return (
     <div className="app">
@@ -62,6 +89,7 @@ export default function App() {
         roomName={activeRoom?.name ?? null}
         messages={activeRoomId ? (messages[activeRoomId] || []) : []}
         roomAgents={roomAgents}
+        typingNames={typingNames}
         onSendMessage={handleSendMessage}
       />
       <AgentList agents={agents} />

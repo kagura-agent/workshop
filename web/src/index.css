@@ -241,6 +241,29 @@ body {
   margin-left: auto;
 }
 
+/* Typing indicator */
+.typing-indicator {
+  padding: 0 16px 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  animation: typing-pulse 1.5s ease-in-out infinite;
+}
+
+.typing-dots {
+  letter-spacing: 2px;
+  animation: typing-bounce 1.4s ease-in-out infinite;
+}
+
+@keyframes typing-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes typing-bounce {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
 /* Agent list */
 .agent-list {
   width: 240px;

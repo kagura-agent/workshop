@@ -26,6 +26,7 @@ export interface Message {
 // Messages from server
 export type ServerMessage =
   | { type: 'message'; roomId: string; message: Message }
+  | { type: 'typing'; roomId: string; agentId: string; agentName: string }
   | { type: 'room_list'; rooms: Room[] }
   | { type: 'agent_list'; agents: Agent[] }
   | { type: 'room_created'; room: Room }

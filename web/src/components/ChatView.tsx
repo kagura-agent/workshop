@@ -5,10 +5,11 @@ interface ChatViewProps {
   roomName: string | null;
   messages: Message[];
   roomAgents: Agent[];
+  typingNames: string[];
   onSendMessage: (content: string) => void;
 }
 
-export function ChatView({ roomName, messages, roomAgents, onSendMessage }: ChatViewProps) {
+export function ChatView({ roomName, messages, roomAgents, typingNames, onSendMessage }: ChatViewProps) {
   const [input, setInput] = useState('');
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -131,6 +132,16 @@ export function ChatView({ roomName, messages, roomAgents, onSendMessage }: Chat
         ))}
       </div>
       <form className="chat-input" onSubmit={handleSubmit}>
+        {typingNames.length > 0 && (
+          <div className="typing-indicator">
+            <span className="typing-dots">•••</span>
+            {' '}
+            {typingNames.length === 1
+              ? `${typingNames[0]} is typing...`
+              : `${typingNames.join(', ')} are typing...`
+            }
+          </div>
+        )}
         <div className="input-wrapper">
           {mentionCandidates.length > 0 && mentionQuery !== null && (
             <div className="mention-popup">

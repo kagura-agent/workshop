@@ -22,9 +22,13 @@ export class GatewayConnection {
   private connected = false;
   private pendingCallbacks = new Map<string, (data: any) => void>();
   private ownSessionKeys = new Set<string>();
+  /** Track which sessions have already fired a typing event (reset on final). */
+  private typingFired = new Set<string>();
 
   /** Callback for incoming agent messages. agentId + roomId parsed from sessionKey. */
   onMessage?: (agentId: string, roomId: string, content: string) => void;
+  /** Callback for first delta — signals agent started typing. */
+  onTyping?: (agentId: string, roomId: string) => void;
   onStatusChange?: (status: 'online' | 'connecting' | 'offline') => void;
 
   constructor(gatewayUrl: string, authToken: string) {
@@ -119,6 +123,7 @@ export class GatewayConnection {
     this.connected = false;
     this.pendingCallbacks.clear();
     this.ownSessionKeys.clear();
+    this.typingFired.clear();
     this.onStatusChange?.('offline');
   }
 
@@ -194,11 +199,19 @@ export class GatewayConnection {
     const { agentId, roomId } = parsed;
 
     switch (state) {
-      case 'delta':
-        // Don't emit deltas — wait for final
+      case 'delta': {
+        // Fire typing callback once per response (not on every delta)
+        const key = `${agentId}:${roomId}`;
+        if (!this.typingFired.has(key)) {
+          this.typingFired.add(key);
+          this.onTyping?.(agentId, roomId);
+        }
         break;
+      }
 
       case 'final': {
+        // Clear typing state for this agent+room
+        this.typingFired.delete(`${agentId}:${roomId}`);
         const message = payload.message;
         const text = this.extractChatText(message);
         if (text) {
