@@ -101,6 +101,9 @@ export class Router {
       case 'create_room':
         this.handleCreateRoom(ws, msg.name, msg.agents);
         break;
+      case 'update_room':
+        this.handleUpdateRoom(msg.roomId, msg.agents);
+        break;
       default:
         this.sendTo(ws, { type: 'error', message: 'Unknown message type' });
     }
@@ -159,13 +162,14 @@ export class Router {
     const rows = db.prepare('SELECT * FROM rooms').all() as any[];
     const rooms: Room[] = rows.map((r) => {
       const agents = db.prepare(
-        'SELECT agent_id FROM room_agents WHERE room_id = ?'
-      ).all(r.id) as { agent_id: string }[];
+        'SELECT agent_id, require_mention FROM room_agents WHERE room_id = ?'
+      ).all(r.id) as { agent_id: string; require_mention: number }[];
 
       return {
         id: r.id,
         name: r.name,
         agents: agents.map((a) => a.agent_id),
+        agentConfigs: agents.map((a) => ({ id: a.agent_id, requireMention: !!a.require_mention })),
         createdAt: r.created_at,
         status: r.status,
       };
@@ -199,8 +203,32 @@ export class Router {
     }
 
     const agentIds = agents.map(a => a.id);
-    const room: Room = { id, name, agents: agentIds, createdAt: now, status: 'active' };
+    const agentConfigs = agents.map(a => ({ id: a.id, requireMention: a.requireMention }));
+    const room: Room = { id, name, agents: agentIds, agentConfigs, createdAt: now, status: 'active' };
     this.broadcast({ type: 'room_created', room });
+  }
+
+  private handleUpdateRoom(roomId: string, agents: { id: string; requireMention: boolean }[]): void {
+    const db = getDb();
+
+    // Delete all existing room_agents for this room
+    db.prepare('DELETE FROM room_agents WHERE room_id = ?').run(roomId);
+
+    // Re-insert with new agent list
+    for (const agent of agents) {
+      db.prepare(
+        'INSERT INTO room_agents (room_id, agent_id, require_mention) VALUES (?, ?, ?)'
+      ).run(roomId, agent.id, agent.requireMention ? 1 : 0);
+    }
+
+    // Fetch the updated room
+    const row = db.prepare('SELECT * FROM rooms WHERE id = ?').get(roomId) as any;
+    if (!row) return;
+
+    const agentIds = agents.map(a => a.id);
+    const agentConfigs = agents.map(a => ({ id: a.id, requireMention: a.requireMention }));
+    const room: Room = { id: row.id, name: row.name, agents: agentIds, agentConfigs, createdAt: row.created_at, status: row.status };
+    this.broadcast({ type: 'room_updated', room });
   }
 
   private sendAllRoomHistory(ws: WebSocket): void {

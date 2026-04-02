@@ -7,9 +7,10 @@ interface ChatViewProps {
   roomAgents: Agent[];
   typingNames: string[];
   onSendMessage: (content: string) => void;
+  onEditRoom?: () => void;
 }
 
-export function ChatView({ roomName, messages, roomAgents, typingNames, onSendMessage }: ChatViewProps) {
+export function ChatView({ roomName, messages, roomAgents, typingNames, onSendMessage, onEditRoom }: ChatViewProps) {
   const [input, setInput] = useState('');
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -111,7 +112,14 @@ export function ChatView({ roomName, messages, roomAgents, typingNames, onSendMe
 
   return (
     <div className="chat-view">
-      <div className="chat-header">{roomName}</div>
+      <div className="chat-header">
+        <span>{roomName}</span>
+        {onEditRoom && (
+          <button className="chat-header-edit" onClick={onEditRoom} title="Edit channel members">
+            ⚙️
+          </button>
+        )}
+      </div>
       <div className="message-list" ref={listRef}>
         {messages.length === 0 && (
           <div className="empty-state">No messages yet. Say something!</div>

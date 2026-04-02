@@ -9,6 +9,7 @@ export interface Room {
   id: string;
   name: string;
   agents: string[];
+  agentConfigs?: { id: string; requireMention: boolean }[];
   createdAt: string;
   status: 'active' | 'completed' | 'archived';
 }
@@ -30,12 +31,14 @@ export type ServerMessage =
   | { type: 'room_list'; rooms: Room[] }
   | { type: 'agent_list'; agents: Agent[] }
   | { type: 'room_created'; room: Room }
+  | { type: 'room_updated'; room: Room }
   | { type: 'error'; message: string };
 
 // Messages from client → server
 export type ClientMessage =
   | { type: 'send_message'; roomId: string; content: string }
   | { type: 'create_room'; name: string; agents: { id: string; requireMention: boolean }[] }
+  | { type: 'update_room'; roomId: string; agents: { id: string; requireMention: boolean }[] }
   | { type: 'list_rooms' }
   | { type: 'list_agents' };
 
@@ -43,4 +46,9 @@ export interface CreateChannelDialogProps {
   agents: Agent[];
   onClose: () => void;
   onCreate: (name: string, agents: { id: string; requireMention: boolean }[]) => void;
+  editRoom?: {
+    id: string;
+    name: string;
+    agents: { id: string; requireMention: boolean }[];
+  };
 }
