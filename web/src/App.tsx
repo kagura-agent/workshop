@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { AgentList } from './components/AgentList';
+import { CreateChannelDialog } from './components/CreateChannelDialog';
 import { useWebSocket } from './hooks/useWebSocket';
 import type { Room, Agent, Message, ServerMessage } from './types';
 
@@ -13,6 +14,7 @@ export default function App() {
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
   const [typing, setTyping] = useState<Record<string, Set<string>>>({});
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
+  const [editingRoom, setEditingRoom] = useState<boolean>(false);
 
   const handleMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
@@ -54,6 +56,9 @@ export default function App() {
       case 'room_created':
         setRooms((prev) => [...prev, msg.room]);
         break;
+      case 'room_updated':
+        setRooms((prev) => prev.map((r) => r.id === msg.room.id ? msg.room : r));
+        break;
       case 'error':
         console.error('[workshop]', msg.message);
         break;
@@ -72,6 +77,15 @@ export default function App() {
 
   const handleCreateRoom = (name: string, agentConfigs: { id: string; requireMention: boolean }[]) => {
     send({ type: 'create_room', name, agents: agentConfigs });
+  };
+
+  const handleUpdateRoom = (roomId: string, agentConfigs: { id: string; requireMention: boolean }[]) => {
+    send({ type: 'update_room', roomId, agents: agentConfigs });
+  };
+
+  const handleEditRoom = () => {
+    if (!activeRoomId) return;
+    setEditingRoom(true);
   };
 
   const activeRoom = rooms.find((r) => r.id === activeRoomId);
@@ -97,8 +111,24 @@ export default function App() {
         roomAgents={roomAgents}
         typingNames={typingNames}
         onSendMessage={handleSendMessage}
+        onEditRoom={activeRoom ? handleEditRoom : undefined}
       />
       <AgentList agents={agents} />
+      {editingRoom && activeRoom && (
+        <CreateChannelDialog
+          agents={agents}
+          onClose={() => setEditingRoom(false)}
+          onCreate={(_name, agentConfigs) => {
+            handleUpdateRoom(activeRoom.id, agentConfigs);
+            setEditingRoom(false);
+          }}
+          editRoom={{
+            id: activeRoom.id,
+            name: activeRoom.name,
+            agents: activeRoom.agentConfigs ?? activeRoom.agents.map(id => ({ id, requireMention: false })),
+          }}
+        />
+      )}
       {!connected && (
         <div style={{
           position: 'fixed',

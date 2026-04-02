@@ -1,10 +1,33 @@
 import { useState, useEffect } from 'react';
 import type { CreateChannelDialogProps } from '../types';
 
-export function CreateChannelDialog({ agents, onClose, onCreate }: CreateChannelDialogProps) {
-  const [name, setName] = useState('');
-  const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const [requireMention, setRequireMention] = useState<Record<string, boolean>>({});
+export function CreateChannelDialog({ agents, onClose, onCreate, editRoom }: CreateChannelDialogProps) {
+  const isEdit = !!editRoom;
+
+  const [name, setName] = useState(() => {
+    if (editRoom) return editRoom.name.replace(/^#/, '');
+    return '';
+  });
+
+  const [selected, setSelected] = useState<Record<string, boolean>>(() => {
+    if (editRoom) {
+      const sel: Record<string, boolean> = {};
+      for (const a of editRoom.agents) sel[a.id] = true;
+      return sel;
+    }
+    return {};
+  });
+
+  const [requireMention, setRequireMention] = useState<Record<string, boolean>>(() => {
+    if (editRoom) {
+      const rm: Record<string, boolean> = {};
+      for (const a of editRoom.agents) {
+        if (a.requireMention) rm[a.id] = true;
+      }
+      return rm;
+    }
+    return {};
+  });
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -28,20 +51,25 @@ export function CreateChannelDialog({ agents, onClose, onCreate }: CreateChannel
     setRequireMention(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleCreate = () => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    const channelName = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+  const handleSubmit = () => {
     const agentConfigs = agents
       .filter(a => selected[a.id])
       .map(a => ({ id: a.id, requireMention: !!requireMention[a.id] }));
-    onCreate(channelName, agentConfigs);
+
+    if (isEdit) {
+      onCreate(editRoom!.name, agentConfigs);
+    } else {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const channelName = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+      onCreate(channelName, agentConfigs);
+    }
   };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()}>
-        <h2 className="modal-title">Create Channel</h2>
+        <h2 className="modal-title">{isEdit ? 'Edit Channel' : 'Create Channel'}</h2>
 
         <label className="modal-label">Channel Name</label>
         <div className="modal-input-wrapper">
@@ -52,7 +80,8 @@ export function CreateChannelDialog({ agents, onClose, onCreate }: CreateChannel
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="new-channel"
-            autoFocus
+            autoFocus={!isEdit}
+            disabled={isEdit}
           />
         </div>
 
@@ -89,10 +118,10 @@ export function CreateChannelDialog({ agents, onClose, onCreate }: CreateChannel
           <button className="modal-btn modal-btn-cancel" onClick={onClose}>Cancel</button>
           <button
             className="modal-btn modal-btn-create"
-            onClick={handleCreate}
-            disabled={!name.trim()}
+            onClick={handleSubmit}
+            disabled={!isEdit && !name.trim()}
           >
-            Create Channel
+            {isEdit ? 'Save' : 'Create Channel'}
           </button>
         </div>
       </div>

@@ -14,6 +14,7 @@ export interface Room {
   id: string;
   name: string;
   agents: string[]; // agent IDs
+  agentConfigs?: { id: string; requireMention: boolean }[];
   createdAt: string;
   status: 'active' | 'completed' | 'archived';
 }
@@ -33,6 +34,7 @@ export type ClientMessage =
   | { type: 'send_message'; roomId: string; content: string }
   | { type: 'join_room'; roomId: string }
   | { type: 'create_room'; name: string; agents: { id: string; requireMention: boolean }[] }
+  | { type: 'update_room'; roomId: string; agents: { id: string; requireMention: boolean }[] }
   | { type: 'list_rooms' }
   | { type: 'list_agents' };
 
@@ -43,4 +45,5 @@ export type ServerMessage =
   | { type: 'room_list'; rooms: Room[] }
   | { type: 'agent_list'; agents: Agent[] }
   | { type: 'room_created'; room: Room }
+  | { type: 'room_updated'; room: Room }
   | { type: 'error'; message: string };
