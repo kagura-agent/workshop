@@ -47,6 +47,9 @@ export default function App() {
   };
 
   const activeRoom = rooms.find((r) => r.id === activeRoomId);
+  const roomAgents = activeRoom
+    ? agents.filter(a => activeRoom.agents.includes(a.id))
+    : [];
 
   return (
     <div className="app">
@@ -58,6 +61,7 @@ export default function App() {
       <ChatView
         roomName={activeRoom?.name ?? null}
         messages={activeRoomId ? (messages[activeRoomId] || []) : []}
+        roomAgents={roomAgents}
         onSendMessage={handleSendMessage}
       />
       <AgentList agents={agents} />

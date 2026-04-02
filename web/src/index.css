@@ -173,6 +173,10 @@ body {
   padding: 16px;
 }
 
+.input-wrapper {
+  position: relative;
+}
+
 .chat-input input {
   width: 100%;
   padding: 12px 16px;
@@ -186,6 +190,55 @@ body {
 
 .chat-input input::placeholder {
   color: var(--text-muted);
+}
+
+/* Mention popup */
+.mention-popup {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 4px;
+  background: var(--bg-tertiary, #2f3136);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.mention-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.mention-item:hover,
+.mention-item.active {
+  background: var(--bg-hover, rgba(79, 84, 92, 0.6));
+}
+
+.mention-avatar {
+  font-size: 18px;
+  width: 24px;
+  text-align: center;
+}
+
+.mention-name {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.mention-id {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-left: auto;
 }
 
 /* Agent list */
