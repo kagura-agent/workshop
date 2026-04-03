@@ -97,7 +97,7 @@ export default function App() {
     : [];
 
   return (
-    <div className="app">
+    <div className="flex h-screen">
       <Sidebar
         channels={channels}
         agents={agents}
@@ -130,17 +130,7 @@ export default function App() {
         />
       )}
       {!connected && (
-        <div style={{
-          position: 'fixed',
-          bottom: 16,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: '#ed4245',
-          color: 'white',
-          padding: '8px 16px',
-          borderRadius: 4,
-          fontSize: 13,
-        }}>
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded text-sm">
           Disconnected from server
         </div>
       )}

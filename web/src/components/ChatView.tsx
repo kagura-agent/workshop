@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 import type { Agent, Message } from '../types';
 
 interface ChatViewProps {
@@ -96,8 +98,10 @@ export function ChatView({ channelName, messages, channelAgents, typingNames, on
 
   if (!channelName) {
     return (
-      <div className="chat-view">
-        <div className="empty-state">Select a channel to start chatting</div>
+      <div className="flex-1 flex flex-col bg-muted">
+        <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+          Select a channel to start chatting
+        </div>
       </div>
     );
   }
@@ -111,38 +115,53 @@ export function ChatView({ channelName, messages, channelAgents, typingNames, on
   };
 
   return (
-    <div className="chat-view">
-      <div className="chat-header">
+    <div className="flex-1 flex flex-col bg-muted">
+      <div className="p-3 px-4 font-semibold border-b border-border flex items-center gap-2 before:content-['#'] before:text-muted-foreground/60 before:text-xl">
         <span>{channelName}</span>
         {onEditChannel && (
-          <button className="chat-header-edit" onClick={onEditChannel} title="Edit channel members">
+          <button
+            className="ml-auto cursor-pointer text-muted-foreground hover:text-foreground"
+            onClick={onEditChannel}
+            title="Edit channel members"
+          >
             ⚙️
           </button>
         )}
       </div>
-      <div className="message-list" ref={listRef}>
-        {messages.length === 0 && (
-          <div className="empty-state">No messages yet. Say something!</div>
-        )}
-        {messages.map((msg) => (
-          <div key={msg.id} className="message">
-            <div className={`message-avatar ${msg.role === 'user' ? 'user' : ''}`}>
-              {msg.senderName.charAt(0).toUpperCase()}
+      <ScrollArea className="flex-1">
+        <div className="p-4" ref={listRef}>
+          {messages.length === 0 && (
+            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+              No messages yet. Say something!
             </div>
-            <div className="message-body">
-              <div className="message-header">
-                <span className="message-sender">{msg.senderName}</span>
-                <span className="message-time">{formatTime(msg.timestamp)}</span>
+          )}
+          {messages.map((msg) => (
+            <div key={msg.id} className="flex gap-3 py-1 mb-2">
+              <div
+                className={cn(
+                  'w-10 h-10 rounded-full flex items-center justify-center text-base font-semibold shrink-0 text-white',
+                  msg.role === 'user' ? 'bg-discord-online' : 'bg-discord-accent'
+                )}
+              >
+                {msg.senderName.charAt(0).toUpperCase()}
               </div>
-              <div className="message-content">{msg.content}</div>
+              <div className="min-w-0">
+                <div className="flex items-baseline gap-2 mb-0.5">
+                  <span className="font-semibold text-sm">{msg.senderName}</span>
+                  <span className="text-[11px] text-muted-foreground">{formatTime(msg.timestamp)}</span>
+                </div>
+                <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">
+                  {msg.content}
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
-      <form className="chat-input" onSubmit={handleSubmit}>
+          ))}
+        </div>
+      </ScrollArea>
+      <form className="p-4" onSubmit={handleSubmit}>
         {typingNames.length > 0 && (
-          <div className="typing-indicator">
-            <span className="typing-dots">•••</span>
+          <div className="px-4 pb-1 text-xs text-muted-foreground animate-pulse">
+            <span className="tracking-widest">•••</span>
             {' '}
             {typingNames.length === 1
               ? `${typingNames[0]} is typing...`
@@ -150,19 +169,22 @@ export function ChatView({ channelName, messages, channelAgents, typingNames, on
             }
           </div>
         )}
-        <div className="input-wrapper">
+        <div className="relative">
           {mentionCandidates.length > 0 && mentionQuery !== null && (
-            <div className="mention-popup">
+            <div className="absolute bottom-full left-0 right-0 mb-1 bg-accent border border-border rounded-lg p-1 max-h-50 overflow-y-auto z-10 shadow-lg">
               {mentionCandidates.map((agent, i) => (
                 <div
                   key={agent.id}
-                  className={`mention-item ${i === mentionIndex ? 'active' : ''}`}
+                  className={cn(
+                    'flex items-center gap-2 py-2 px-3 rounded cursor-pointer text-sm hover:bg-muted',
+                    i === mentionIndex && 'bg-muted'
+                  )}
                   onClick={() => insertMention(agent)}
                   onMouseEnter={() => setMentionIndex(i)}
                 >
-                  <span className="mention-avatar">{agent.avatar || agent.name.charAt(0)}</span>
-                  <span className="mention-name">{agent.name}</span>
-                  <span className="mention-id">@{agent.id}</span>
+                  <span className="text-lg w-6 text-center">{agent.avatar || agent.name.charAt(0)}</span>
+                  <span className="text-foreground font-medium">{agent.name}</span>
+                  <span className="text-muted-foreground text-xs ml-auto">@{agent.id}</span>
                 </div>
               ))}
             </div>
@@ -174,6 +196,7 @@ export function ChatView({ channelName, messages, channelAgents, typingNames, on
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             placeholder={`Message ${channelName} — type @ to mention`}
+            className="w-full py-3 px-4 rounded-lg bg-card text-foreground text-sm outline-none border-none placeholder:text-muted-foreground/60"
           />
         </div>
       </form>

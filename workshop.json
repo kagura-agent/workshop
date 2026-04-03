@@ -13,12 +13,12 @@
     { "id": "tester", "name": "Tester", "avatar": "🧪" }
   ],
   "channels": [
-    { "id": "general", "name": "#general", "agents": [
+    { "id": "general", "name": "general", "agents": [
       { "id": "kagura", "requireMention": false },
       { "id": "anan", "requireMention": true },
       { "id": "ruantang", "requireMention": true }
     ]},
-    { "id": "workshop", "name": "#workshop", "agents": [
+    { "id": "workshop", "name": "workshop", "agents": [
       { "id": "kagura", "requireMention": false },
       { "id": "leader", "requireMention": true },
       { "id": "dev", "requireMention": true },
