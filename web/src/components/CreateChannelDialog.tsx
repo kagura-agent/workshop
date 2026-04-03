@@ -1,4 +1,10 @@
 import { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import type { CreateChannelDialogProps } from '../types';
 
 export function CreateChannelDialog({ agents, onClose, onCreate, editChannel }: CreateChannelDialogProps) {
@@ -61,70 +67,74 @@ export function CreateChannelDialog({ agents, onClose, onCreate, editChannel }: 
     } else {
       const trimmed = name.trim();
       if (!trimmed) return;
-      const channelName = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+      const channelName = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
       onCreate(channelName, agentConfigs);
     }
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
-        <h2 className="modal-title">{isEdit ? 'Edit Channel' : 'Create Channel'}</h2>
+    <Dialog open={true} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[440px]">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? 'Edit Channel' : 'Create Channel'}</DialogTitle>
+        </DialogHeader>
 
-        <label className="modal-label">Channel Name</label>
-        <div className="modal-input-wrapper">
-          <span className="modal-input-prefix">#</span>
-          <input
-            className="modal-input"
-            type="text"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="new-channel"
-            autoFocus={!isEdit}
-            disabled={isEdit}
-          />
-        </div>
-
-        <label className="modal-label">Agents</label>
-        <div className="modal-agent-list">
-          {agents.map(agent => (
-            <div key={agent.id} className="modal-agent-row">
-              <label className="modal-agent-check">
-                <input
-                  type="checkbox"
-                  checked={!!selected[agent.id]}
-                  onChange={() => toggleAgent(agent.id)}
-                />
-                <span className="modal-agent-avatar">{agent.avatar || agent.name.charAt(0)}</span>
-                <span className="modal-agent-name">{agent.name}</span>
-              </label>
-              {selected[agent.id] && (
-                <label className="modal-mention-toggle">
-                  <span className="modal-mention-label">Only when @mentioned</span>
-                  <button
-                    type="button"
-                    className={`toggle-switch ${requireMention[agent.id] ? 'active' : ''}`}
-                    onClick={() => toggleMention(agent.id)}
-                  >
-                    <span className="toggle-knob" />
-                  </button>
-                </label>
-              )}
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wide">Channel Name</Label>
+            <div className="flex items-center gap-1 bg-background rounded-md border border-input px-3">
+              <span className="text-muted-foreground text-base font-semibold">#</span>
+              <Input
+                className="border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="new-channel"
+                autoFocus={!isEdit}
+                disabled={isEdit}
+              />
             </div>
-          ))}
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wide">Agents</Label>
+            <div className="rounded-md overflow-hidden border border-input">
+              {agents.map(agent => (
+                <div key={agent.id} className="flex items-center justify-between px-3 py-2 bg-background border-b border-input last:border-b-0">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                    <Checkbox
+                      checked={!!selected[agent.id]}
+                      onCheckedChange={() => toggleAgent(agent.id)}
+                    />
+                    <span className="text-lg">{agent.avatar || agent.name.charAt(0)}</span>
+                    <span>{agent.name}</span>
+                  </label>
+                  {selected[agent.id] && (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">Only when @mentioned</span>
+                      <Switch
+                        checked={!!requireMention[agent.id]}
+                        onCheckedChange={() => toggleMention(agent.id)}
+                      />
+                    </label>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
-        <div className="modal-actions">
-          <button className="modal-btn modal-btn-cancel" onClick={onClose}>Cancel</button>
-          <button
-            className="modal-btn modal-btn-create"
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button
+            className="bg-discord-online hover:bg-discord-online/90 text-white"
             onClick={handleSubmit}
             disabled={!isEdit && !name.trim()}
           >
             {isEdit ? 'Save' : 'Create Channel'}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
