@@ -1,7 +1,7 @@
 {
   "gateway": {
     "url": "ws://localhost:18789",
-    "token": "25f126c40acf953d5f04c7ee0c708a24ff36879e324cd777"
+    "token": "YOUR_GATEWAY_TOKEN_HERE"
   },
   "agents": [
     { "id": "kagura", "name": "Kagura", "avatar": "🌸" },
