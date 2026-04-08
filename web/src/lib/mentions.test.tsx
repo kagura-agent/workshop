@@ -43,7 +43,8 @@ describe('renderMessageContent', () => {
 
   it('highlights multiple mentions in one message', () => {
     render(<Wrapper content="@Kagura and @Anan please review" />);
-    const mentions = document.querySelectorAll('.mention');
+    const msg = screen.getByTestId('msg');
+    const mentions = msg.querySelectorAll('.mention');
     expect(mentions.length).toBe(2);
     expect(mentions[0].textContent).toBe('@Kagura');
     expect(mentions[1].textContent).toBe('@Anan');
@@ -67,5 +68,11 @@ describe('renderMessageContent', () => {
     render(<Wrapper content="" />);
     const msg = screen.getByTestId('msg');
     expect(msg.textContent).toBe('');
+  });
+
+  it('matches mentions case-insensitively', () => {
+    render(<Wrapper content="hey @KAGURA" />);
+    const mention = screen.getByText('@KAGURA');
+    expect(mention.classList.contains('mention')).toBe(true);
   });
 });
