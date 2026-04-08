@@ -75,4 +75,19 @@ describe('renderMessageContent', () => {
     const mention = screen.getByText('@KAGURA');
     expect(mention.classList.contains('mention')).toBe(true);
   });
+
+  it('highlights @agent in email-like text (matches server behavior)', () => {
+    render(<Wrapper content="user@kagura.com" />);
+    const msg = screen.getByTestId('msg');
+    const mentions = msg.querySelectorAll('.mention');
+    expect(mentions.length).toBe(1);
+    expect(mentions[0].textContent).toBe('@kagura');
+  });
+
+  it('renders correctly with empty agents array', () => {
+    render(<div data-testid="msg">{renderMessageContent('@Kagura hello', [])}</div>);
+    const msg = screen.getByTestId('msg');
+    expect(msg.querySelector('.mention')).toBeNull();
+    expect(msg.textContent).toBe('@Kagura hello');
+  });
 });
