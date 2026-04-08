@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { renderMessageContent } from '@/lib/mentions';
 import type { Agent, Message } from '../types';
 
 interface ChatViewProps {
@@ -151,7 +152,7 @@ export function ChatView({ channelName, messages, channelAgents, typingNames, on
                   <span className="text-[11px] text-muted-foreground">{formatTime(msg.timestamp)}</span>
                 </div>
                 <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">
-                  {msg.content}
+                  {renderMessageContent(msg.content, channelAgents)}
                 </div>
               </div>
             </div>
