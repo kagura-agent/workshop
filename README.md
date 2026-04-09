@@ -132,3 +132,7 @@ Related upstream issues:
 ## License
 
 MIT
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=kagura-agent/workshop&type=Date)](https://star-history.com/#kagura-agent/workshop&Date)
