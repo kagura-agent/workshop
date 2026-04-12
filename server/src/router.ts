@@ -2,7 +2,8 @@ import { v4 as uuid } from 'uuid';
 import type WebSocket from 'ws';
 import { getDb } from './db.js';
 import { GatewayConnection } from './gateway.js';
-import type { ClientMessage, ServerMessage, Message, Channel, Agent, TodoItem } from './types.js';
+import { ChannelCronManager } from './cron.js';
+import type { ClientMessage, ServerMessage, Message, Channel, Agent, TodoItem, CronExecution } from './types.js';
 
 /**
  * Router — bridges frontend WebSocket clients with a single shared OpenClaw Gateway connection.
@@ -11,6 +12,7 @@ export class Router {
   private clients = new Set<WebSocket>();
   private gateway: GatewayConnection | null = null;
   private agents = new Map<string, Agent>(); // agentId → agent metadata
+  private cronManager: ChannelCronManager | null = null;
 
   addClient(ws: WebSocket): void {
     this.clients.add(ws);
@@ -88,6 +90,22 @@ export class Router {
     gw.connect();
   }
 
+  /** Initialize the cron manager — call after gateway is ready. */
+  initCron(): void {
+    if (!this.gateway) {
+      console.warn('[cron] cannot init: no gateway');
+      return;
+    }
+
+    this.cronManager = new ChannelCronManager(
+      (content, channelId, agentId) => this.gateway!.sendChat(content, channelId, agentId),
+      this.agents,
+    );
+
+    this.cronManager.syncAllFromDb();
+    console.log('[cron] manager initialized');
+  }
+
   private handleClientMessage(ws: WebSocket, msg: ClientMessage): void {
     switch (msg.type) {
       case 'send_message':
@@ -119,6 +137,12 @@ export class Router {
         break;
       case 'todo_delete':
         this.handleTodoDelete(msg.id);
+        break;
+      case 'cron_trigger':
+        this.handleCronTrigger(ws, msg.channelId);
+        break;
+      case 'cron_history':
+        this.handleCronHistory(ws, msg.channelId);
         break;
       default:
         this.sendTo(ws, { type: 'error', message: 'Unknown message type' });
@@ -319,9 +343,12 @@ export class Router {
       cronEnabled: !!updated.cron_enabled,
     };
     this.broadcast({ type: 'channel_meta_updated', channel });
-  }
 
-  // --- Todo handlers ---
+    // Sync cron schedule if cron settings changed
+    if (this.cronManager && (metadata.cronSchedule !== undefined || metadata.cronEnabled !== undefined)) {
+      this.cronManager.syncChannel(channel);
+    }
+  }
 
   private handleTodoList(ws: WebSocket): void {
     const db = getDb();
@@ -394,6 +421,33 @@ export class Router {
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     };
+  }
+
+  // --- Cron handlers ---
+
+  private handleCronTrigger(ws: WebSocket, channelId: string): void {
+    if (!this.cronManager) {
+      this.sendTo(ws, { type: 'error', message: 'Cron manager not initialized' });
+      return;
+    }
+
+    this.cronManager.triggerChannel(channelId);
+
+    // Return the latest execution
+    const executions = this.cronManager.getHistory(channelId, 1);
+    if (executions.length > 0) {
+      this.broadcast({ type: 'cron_fired', channelId, execution: executions[0] });
+    }
+  }
+
+  private handleCronHistory(ws: WebSocket, channelId: string): void {
+    if (!this.cronManager) {
+      this.sendTo(ws, { type: 'cron_history', channelId, executions: [] });
+      return;
+    }
+
+    const executions = this.cronManager.getHistory(channelId);
+    this.sendTo(ws, { type: 'cron_history', channelId, executions });
   }
 
   private sendAllChannelHistory(ws: WebSocket): void {

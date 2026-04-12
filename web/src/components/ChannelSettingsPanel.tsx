@@ -3,12 +3,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import type { Channel, ChannelType } from '../types';
+import type { Channel, ChannelType, CronExecution } from '../types';
 
 interface ChannelSettingsPanelProps {
   channel: Channel;
   onClose: () => void;
   onSave: (metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'northStar' | 'todoSection' | 'cronSchedule' | 'cronEnabled'>>) => void;
+  onCronTrigger?: (channelId: string) => void;
+  cronHistory?: CronExecution[];
 }
 
 const CHANNEL_TYPES: { value: ChannelType; label: string }[] = [
@@ -17,7 +19,7 @@ const CHANNEL_TYPES: { value: ChannelType; label: string }[] = [
   { value: 'meta', label: 'Meta' },
 ];
 
-export function ChannelSettingsPanel({ channel, onClose, onSave }: ChannelSettingsPanelProps) {
+export function ChannelSettingsPanel({ channel, onClose, onSave, onCronTrigger, cronHistory }: ChannelSettingsPanelProps) {
   const [type, setType] = useState<ChannelType>(channel.type);
   const [positioning, setPositioning] = useState(channel.positioning);
   const [guidelines, setGuidelines] = useState(channel.guidelines);
@@ -125,6 +127,46 @@ export function ChannelSettingsPanel({ channel, onClose, onSave }: ChannelSettin
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">Cron Enabled</Label>
             <Switch checked={cronEnabled} onCheckedChange={setCronEnabled} />
           </div>
+
+          {/* Cron status + Run Now */}
+          {channel.cronSchedule && (
+            <div className="space-y-2 pt-2 border-t border-border">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={`inline-block w-2 h-2 rounded-full ${channel.cronEnabled ? 'bg-green-500' : 'bg-muted-foreground/40'}`} />
+                  <span className="text-xs text-muted-foreground">
+                    {channel.cronEnabled ? 'Cron active' : 'Cron paused'}
+                  </span>
+                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{channel.cronSchedule}</code>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                  onClick={() => onCronTrigger?.(channel.id)}
+                >
+                  Run Now
+                </Button>
+              </div>
+
+              {cronHistory && cronHistory.length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground font-medium">Recent executions</span>
+                  <div className="max-h-[120px] overflow-y-auto space-y-1">
+                    {cronHistory.slice(0, 5).map((exec) => (
+                      <div key={exec.id} className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500/80" />
+                        <span className="font-mono">{new Date(exec.firedAt).toLocaleString()}</span>
+                        <span className="text-muted-foreground/60">
+                          {exec.agentIds.length} agent{exec.agentIds.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="p-4 border-t border-border flex justify-end gap-2">

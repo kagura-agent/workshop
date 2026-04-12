@@ -100,6 +100,16 @@ function initSchema(): void {
       changed_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (todo_id) REFERENCES todo_items(id)
     );
+
+    CREATE TABLE IF NOT EXISTS cron_executions (
+      id TEXT PRIMARY KEY,
+      channel_id TEXT NOT NULL,
+      fired_at TEXT NOT NULL DEFAULT (datetime('now')),
+      agent_ids TEXT NOT NULL DEFAULT '[]',
+      prompt_snippet TEXT,
+      status TEXT NOT NULL DEFAULT 'sent',
+      FOREIGN KEY (channel_id) REFERENCES channels(id)
+    );
   `);
 }
 

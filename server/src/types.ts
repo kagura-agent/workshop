@@ -63,7 +63,9 @@ export type ClientMessage =
   | { type: 'todo_list' }
   | { type: 'todo_create'; section: string; content: string; assignedChannel?: string; assignedAgent?: string }
   | { type: 'todo_update'; id: string; updates: Partial<Pick<TodoItem, 'content' | 'status' | 'section' | 'assignedChannel' | 'assignedAgent'>> }
-  | { type: 'todo_delete'; id: string };
+  | { type: 'todo_delete'; id: string }
+  | { type: 'cron_trigger'; channelId: string }
+  | { type: 'cron_history'; channelId: string };
 
 // WebSocket protocol: server → client
 export type ServerMessage =
@@ -78,4 +80,15 @@ export type ServerMessage =
   | { type: 'todo_created'; item: TodoItem }
   | { type: 'todo_updated'; item: TodoItem }
   | { type: 'todo_deleted'; id: string }
+  | { type: 'cron_fired'; channelId: string; execution: CronExecution }
+  | { type: 'cron_history'; channelId: string; executions: CronExecution[] }
   | { type: 'error'; message: string };
+
+export interface CronExecution {
+  id: string;
+  channelId: string;
+  firedAt: string;
+  agentIds: string[];
+  promptSnippet: string;
+  status: string;
+}

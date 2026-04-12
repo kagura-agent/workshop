@@ -77,6 +77,9 @@ try {
   } else {
     console.warn(`[workshop] no gateway config found`);
   }
+
+  // Initialize cron scheduler after gateway
+  router.initCron();
 } catch (err: any) {
   console.warn(`[workshop] could not load config: ${err.message}`);
 }
