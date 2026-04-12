@@ -1,6 +1,20 @@
 #!/bin/bash
+# DEPRECATED: Use systemd user units instead.
+# Install with: npm run install-services
+# Check status: npm run status
+#
+# This script is kept for reference but is no longer the recommended
+# approach. systemd provides reliable process supervision with automatic
+# restart on failure.
+#
+# Original description:
 # Workshop process supervisor — keeps server + vite alive
 # Usage: ./scripts/supervise.sh
+
+echo "[supervise] WARNING: This script is deprecated."
+echo "[supervise] Use systemd user units instead: npm run install-services"
+echo "[supervise] Continuing anyway for backwards compatibility..."
+echo ""
 
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SERVER_LOG="/tmp/workshop-server.log"

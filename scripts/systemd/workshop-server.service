@@ -1,0 +1,16 @@
+[Unit]
+Description=Workshop Express+WS Server (port 3100)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/kagura/.openclaw/workspace/workshop
+ExecStart=/home/kagura/.nvm/versions/node/v22.22.2/bin/node server/dist/index.js
+Restart=on-failure
+RestartSec=3
+Environment=NODE_ENV=production
+Environment=PORT=3100
+Environment=PATH=/home/kagura/.nvm/versions/node/v22.22.2/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target

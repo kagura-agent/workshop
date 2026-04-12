@@ -5,7 +5,12 @@
   "scripts": {
     "dev:server": "cd server && npm run dev",
     "dev:web": "cd web && npm run dev",
-    "build": "cd server && npm run build && cd ../web && npm run build"
+    "build": "cd server && npm run build && cd ../web && npm run build",
+    "install-services": "bash scripts/install-services.sh",
+    "uninstall-services": "bash scripts/uninstall-services.sh",
+    "status": "bash scripts/workshop-status.sh",
+    "logs:server": "journalctl --user -u workshop-server -f",
+    "logs:web": "journalctl --user -u workshop-web -f"
   },
   "dependencies": {
     "node-cron": "^4.2.1"
