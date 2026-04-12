@@ -2,7 +2,7 @@ import { v4 as uuid } from 'uuid';
 import type WebSocket from 'ws';
 import { getDb } from './db.js';
 import { GatewayConnection } from './gateway.js';
-import type { ClientMessage, ServerMessage, Message, Channel, Agent } from './types.js';
+import type { ClientMessage, ServerMessage, Message, Channel, Agent, TodoItem } from './types.js';
 
 /**
  * Router — bridges frontend WebSocket clients with a single shared OpenClaw Gateway connection.
@@ -19,6 +19,7 @@ export class Router {
     // Immediately send current channels and agents so the UI populates on load
     this.handleListChannels(ws);
     this.handleListAgents(ws);
+    this.handleTodoList(ws);
 
     // Send message history for all active channels
     this.sendAllChannelHistory(ws);
@@ -99,10 +100,25 @@ export class Router {
         this.handleListAgents(ws);
         break;
       case 'create_channel':
-        this.handleCreateChannel(ws, msg.name, msg.agents);
+        this.handleCreateChannel(ws, msg.name, msg.agents, msg.metadata);
         break;
       case 'update_channel':
         this.handleUpdateChannel(msg.channelId, msg.agents);
+        break;
+      case 'update_channel_meta':
+        this.handleUpdateChannelMeta(msg.channelId, msg.metadata);
+        break;
+      case 'todo_list':
+        this.handleTodoList(ws);
+        break;
+      case 'todo_create':
+        this.handleTodoCreate(msg.section, msg.content, msg.assignedChannel, msg.assignedAgent);
+        break;
+      case 'todo_update':
+        this.handleTodoUpdate(msg.id, msg.updates);
+        break;
+      case 'todo_delete':
+        this.handleTodoDelete(msg.id);
         break;
       default:
         this.sendTo(ws, { type: 'error', message: 'Unknown message type' });
@@ -172,6 +188,13 @@ export class Router {
         agentConfigs: agents.map((a) => ({ id: a.agent_id, requireMention: !!a.require_mention })),
         createdAt: r.created_at,
         status: r.status,
+        type: r.type ?? 'project',
+        positioning: r.positioning ?? '',
+        guidelines: r.guidelines ?? '',
+        northStar: r.north_star ?? '',
+        todoSection: r.todo_section ?? null,
+        cronSchedule: r.cron_schedule ?? null,
+        cronEnabled: !!r.cron_enabled,
       };
     });
     this.sendTo(ws, { type: 'channel_list', channels });
@@ -189,12 +212,27 @@ export class Router {
     this.sendTo(ws, { type: 'agent_list', agents });
   }
 
-  private handleCreateChannel(_ws: WebSocket, name: string, agents: { id: string; requireMention: boolean }[]): void {
+  private handleCreateChannel(
+    _ws: WebSocket,
+    name: string,
+    agents: { id: string; requireMention: boolean }[],
+    metadata?: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'northStar' | 'todoSection' | 'cronSchedule' | 'cronEnabled'>>,
+  ): void {
     const db = getDb();
     const id = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     const now = new Date().toISOString();
 
-    db.prepare('INSERT INTO channels (id, name, created_at) VALUES (?, ?, ?)').run(id, name, now);
+    const channelType = metadata?.type ?? 'project';
+    const positioning = metadata?.positioning ?? '';
+    const guidelines = metadata?.guidelines ?? '';
+    const northStar = metadata?.northStar ?? '';
+    const todoSection = metadata?.todoSection ?? null;
+    const cronSchedule = metadata?.cronSchedule ?? null;
+    const cronEnabled = metadata?.cronEnabled ? 1 : 0;
+
+    db.prepare(
+      'INSERT INTO channels (id, name, created_at, type, positioning, guidelines, north_star, todo_section, cron_schedule, cron_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(id, name, now, channelType, positioning, guidelines, northStar, todoSection, cronSchedule, cronEnabled);
 
     for (const agent of agents) {
       db.prepare(
@@ -204,7 +242,11 @@ export class Router {
 
     const agentIds = agents.map(a => a.id);
     const agentConfigs = agents.map(a => ({ id: a.id, requireMention: a.requireMention }));
-    const channel: Channel = { id, name, agents: agentIds, agentConfigs, createdAt: now, status: 'active' };
+    const channel: Channel = {
+      id, name, agents: agentIds, agentConfigs, createdAt: now, status: 'active',
+      type: channelType, positioning, guidelines, northStar, todoSection, cronSchedule,
+      cronEnabled: !!cronEnabled,
+    };
     this.broadcast({ type: 'channel_created', channel });
   }
 
@@ -227,8 +269,131 @@ export class Router {
 
     const agentIds = agents.map(a => a.id);
     const agentConfigs = agents.map(a => ({ id: a.id, requireMention: a.requireMention }));
-    const channel: Channel = { id: row.id, name: row.name, agents: agentIds, agentConfigs, createdAt: row.created_at, status: row.status };
+    const channel: Channel = {
+      id: row.id, name: row.name, agents: agentIds, agentConfigs, createdAt: row.created_at, status: row.status,
+      type: row.type ?? 'project', positioning: row.positioning ?? '', guidelines: row.guidelines ?? '',
+      northStar: row.north_star ?? '', todoSection: row.todo_section ?? null,
+      cronSchedule: row.cron_schedule ?? null, cronEnabled: !!row.cron_enabled,
+    };
     this.broadcast({ type: 'channel_updated', channel });
+  }
+
+  private handleUpdateChannelMeta(
+    channelId: string,
+    metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'northStar' | 'todoSection' | 'cronSchedule' | 'cronEnabled'>>,
+  ): void {
+    const db = getDb();
+    const row = db.prepare('SELECT * FROM channels WHERE id = ?').get(channelId) as any;
+    if (!row) return;
+
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (metadata.type !== undefined) { updates.push('type = ?'); values.push(metadata.type); }
+    if (metadata.positioning !== undefined) { updates.push('positioning = ?'); values.push(metadata.positioning); }
+    if (metadata.guidelines !== undefined) { updates.push('guidelines = ?'); values.push(metadata.guidelines); }
+    if (metadata.northStar !== undefined) { updates.push('north_star = ?'); values.push(metadata.northStar); }
+    if (metadata.todoSection !== undefined) { updates.push('todo_section = ?'); values.push(metadata.todoSection); }
+    if (metadata.cronSchedule !== undefined) { updates.push('cron_schedule = ?'); values.push(metadata.cronSchedule); }
+    if (metadata.cronEnabled !== undefined) { updates.push('cron_enabled = ?'); values.push(metadata.cronEnabled ? 1 : 0); }
+
+    if (updates.length === 0) return;
+
+    values.push(channelId);
+    db.prepare(`UPDATE channels SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+
+    // Re-fetch for broadcast
+    const updated = db.prepare('SELECT * FROM channels WHERE id = ?').get(channelId) as any;
+    const agents = db.prepare(
+      'SELECT agent_id, require_mention FROM channel_agents WHERE channel_id = ?'
+    ).all(channelId) as { agent_id: string; require_mention: number }[];
+
+    const channel: Channel = {
+      id: updated.id, name: updated.name,
+      agents: agents.map(a => a.agent_id),
+      agentConfigs: agents.map(a => ({ id: a.agent_id, requireMention: !!a.require_mention })),
+      createdAt: updated.created_at, status: updated.status,
+      type: updated.type ?? 'project', positioning: updated.positioning ?? '',
+      guidelines: updated.guidelines ?? '', northStar: updated.north_star ?? '',
+      todoSection: updated.todo_section ?? null, cronSchedule: updated.cron_schedule ?? null,
+      cronEnabled: !!updated.cron_enabled,
+    };
+    this.broadcast({ type: 'channel_meta_updated', channel });
+  }
+
+  // --- Todo handlers ---
+
+  private handleTodoList(ws: WebSocket): void {
+    const db = getDb();
+    const rows = db.prepare('SELECT * FROM todo_items ORDER BY created_at ASC').all() as any[];
+    const items: TodoItem[] = rows.map(this.mapTodoRow);
+    this.sendTo(ws, { type: 'todo_list', items });
+  }
+
+  private handleTodoCreate(section: string, content: string, assignedChannel?: string, assignedAgent?: string): void {
+    const db = getDb();
+    const id = uuid();
+    const now = new Date().toISOString();
+
+    db.prepare(
+      'INSERT INTO todo_items (id, section, content, status, assigned_channel, assigned_agent, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(id, section, content, 'pending', assignedChannel ?? null, assignedAgent ?? null, now, now);
+
+    const item: TodoItem = { id, section, content, status: 'pending', assignedChannel: assignedChannel ?? null, assignedAgent: assignedAgent ?? null, createdAt: now, updatedAt: now };
+    this.broadcast({ type: 'todo_created', item });
+  }
+
+  private handleTodoUpdate(id: string, updates: Partial<Pick<TodoItem, 'content' | 'status' | 'section' | 'assignedChannel' | 'assignedAgent'>>): void {
+    const db = getDb();
+    const existing = db.prepare('SELECT * FROM todo_items WHERE id = ?').get(id) as any;
+    if (!existing) return;
+
+    const now = new Date().toISOString();
+    const sqlUpdates: string[] = ['updated_at = ?'];
+    const values: any[] = [now];
+
+    const fieldMap: Record<string, string> = {
+      content: 'content', status: 'status', section: 'section',
+      assignedChannel: 'assigned_channel', assignedAgent: 'assigned_agent',
+    };
+
+    for (const [key, col] of Object.entries(fieldMap)) {
+      const val = (updates as any)[key];
+      if (val !== undefined) {
+        // Write audit trail
+        db.prepare(
+          'INSERT INTO todo_history (id, todo_id, field, old_value, new_value, changed_at) VALUES (?, ?, ?, ?, ?, ?)'
+        ).run(uuid(), id, key, String(existing[col] ?? ''), String(val ?? ''), now);
+        sqlUpdates.push(`${col} = ?`);
+        values.push(val);
+      }
+    }
+
+    values.push(id);
+    db.prepare(`UPDATE todo_items SET ${sqlUpdates.join(', ')} WHERE id = ?`).run(...values);
+
+    const row = db.prepare('SELECT * FROM todo_items WHERE id = ?').get(id) as any;
+    this.broadcast({ type: 'todo_updated', item: this.mapTodoRow(row) });
+  }
+
+  private handleTodoDelete(id: string): void {
+    const db = getDb();
+    db.prepare('DELETE FROM todo_history WHERE todo_id = ?').run(id);
+    db.prepare('DELETE FROM todo_items WHERE id = ?').run(id);
+    this.broadcast({ type: 'todo_deleted', id });
+  }
+
+  private mapTodoRow(r: any): TodoItem {
+    return {
+      id: r.id,
+      section: r.section,
+      content: r.content,
+      status: r.status,
+      assignedChannel: r.assigned_channel,
+      assignedAgent: r.assigned_agent,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    };
   }
 
   private sendAllChannelHistory(ws: WebSocket): void {

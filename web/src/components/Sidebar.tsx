@@ -10,9 +10,10 @@ interface SidebarProps {
   activeChannelId: string | null;
   onSelectChannel: (channelId: string) => void;
   onCreateChannel: (name: string, agents: { id: string; requireMention: boolean }[]) => void;
+  onOpenSettings: (channelId: string) => void;
 }
 
-export function Sidebar({ channels, agents, activeChannelId, onSelectChannel, onCreateChannel }: SidebarProps) {
+export function Sidebar({ channels, agents, activeChannelId, onSelectChannel, onCreateChannel, onOpenSettings }: SidebarProps) {
   const [showDialog, setShowDialog] = useState(false);
 
   return (
@@ -38,12 +39,22 @@ export function Sidebar({ channels, agents, activeChannelId, onSelectChannel, on
             <div
               key={channel.id}
               className={cn(
-                "px-3 py-2 rounded cursor-pointer text-muted-foreground hover:bg-accent hover:text-foreground text-sm flex items-center gap-1.5 before:content-['#'] before:text-muted-foreground/60 before:font-semibold",
+                "group px-3 py-2 rounded cursor-pointer text-muted-foreground hover:bg-accent hover:text-foreground text-sm flex items-center gap-1.5 before:content-['#'] before:text-muted-foreground/60 before:font-semibold",
                 channel.id === activeChannelId && 'bg-accent text-foreground'
               )}
               onClick={() => onSelectChannel(channel.id)}
             >
-              {channel.name}
+              <span className="flex-1 truncate">{channel.name}</span>
+              {channel.cronEnabled && (
+                <span className="shrink-0 text-muted-foreground/60 text-[11px]" title="Cron enabled">&#128339;</span>
+              )}
+              <button
+                className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground cursor-pointer text-xs"
+                onClick={(e) => { e.stopPropagation(); onOpenSettings(channel.id); }}
+                title="Channel settings"
+              >
+                &#9881;
+              </button>
             </div>
           ))}
         </div>

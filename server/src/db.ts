@@ -16,6 +16,12 @@ export function getDb(): Database.Database {
   return db;
 }
 
+/** Check if a column exists in a table using pragma table_info. */
+function hasColumn(d: Database.Database, table: string, column: string): boolean {
+  const cols = d.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  return cols.some((c) => c.name === column);
+}
+
 function initSchema(): void {
   const d = getDb();
 
@@ -52,6 +58,47 @@ function initSchema(): void {
       content TEXT NOT NULL,
       timestamp TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (channel_id) REFERENCES channels(id)
+    );
+  `);
+
+  // v0.3 §1: Channel metadata columns
+  const channelMigrations: [string, string][] = [
+    ['type', "ALTER TABLE channels ADD COLUMN type TEXT NOT NULL DEFAULT 'project'"],
+    ['positioning', "ALTER TABLE channels ADD COLUMN positioning TEXT NOT NULL DEFAULT ''"],
+    ['guidelines', "ALTER TABLE channels ADD COLUMN guidelines TEXT NOT NULL DEFAULT ''"],
+    ['north_star', "ALTER TABLE channels ADD COLUMN north_star TEXT NOT NULL DEFAULT ''"],
+    ['todo_section', 'ALTER TABLE channels ADD COLUMN todo_section TEXT'],
+    ['cron_schedule', 'ALTER TABLE channels ADD COLUMN cron_schedule TEXT'],
+    ['cron_enabled', 'ALTER TABLE channels ADD COLUMN cron_enabled INTEGER NOT NULL DEFAULT 0'],
+  ];
+  for (const [col, sql] of channelMigrations) {
+    if (!hasColumn(d, 'channels', col)) {
+      d.exec(sql);
+    }
+  }
+
+  // v0.3 §7: Todo items table
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS todo_items (
+      id TEXT PRIMARY KEY,
+      section TEXT NOT NULL,
+      content TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      assigned_channel TEXT,
+      assigned_agent TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (assigned_channel) REFERENCES channels(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS todo_history (
+      id TEXT PRIMARY KEY,
+      todo_id TEXT NOT NULL,
+      field TEXT NOT NULL,
+      old_value TEXT,
+      new_value TEXT,
+      changed_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (todo_id) REFERENCES todo_items(id)
     );
   `);
 }

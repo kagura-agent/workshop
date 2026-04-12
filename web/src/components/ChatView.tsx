@@ -2,18 +2,26 @@ import { useState, useRef, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { renderMessageContent } from '@/lib/mentions';
-import type { Agent, Message } from '../types';
+import type { Agent, Channel, Message } from '../types';
+
+const TYPE_BADGE: Record<string, { label: string; className: string }> = {
+  project: { label: 'Project', className: 'bg-discord-accent/20 text-discord-accent' },
+  daily: { label: 'Daily', className: 'bg-green-400/20 text-green-400' },
+  meta: { label: 'Meta', className: 'bg-yellow-400/20 text-yellow-400' },
+};
 
 interface ChatViewProps {
-  channelName: string | null;
+  channel: Channel | null;
   messages: Message[];
   channelAgents: Agent[];
   typingNames: string[];
   onSendMessage: (content: string) => void;
   onEditChannel?: () => void;
+  onOpenSettings?: () => void;
+  onToggleTodo?: () => void;
 }
 
-export function ChatView({ channelName, messages, channelAgents, typingNames, onSendMessage, onEditChannel }: ChatViewProps) {
+export function ChatView({ channel, messages, channelAgents, typingNames, onSendMessage, onEditChannel, onOpenSettings, onToggleTodo }: ChatViewProps) {
   const [input, setInput] = useState('');
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -97,7 +105,7 @@ export function ChatView({ channelName, messages, channelAgents, typingNames, on
     setMentionQuery(null);
   };
 
-  if (!channelName) {
+  if (!channel) {
     return (
       <div className="flex-1 flex flex-col bg-muted">
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -115,19 +123,51 @@ export function ChatView({ channelName, messages, channelAgents, typingNames, on
     }
   };
 
+  const channelName = channel.name;
+  const badge = TYPE_BADGE[channel.type] ?? TYPE_BADGE.project;
+
   return (
     <div className="flex-1 flex flex-col bg-muted">
-      <div className="p-3 px-4 font-semibold border-b border-border flex items-center gap-2 before:content-['#'] before:text-muted-foreground/60 before:text-xl">
-        <span>{channelName}</span>
-        {onEditChannel && (
-          <button
-            className="ml-auto cursor-pointer text-muted-foreground hover:text-foreground"
-            onClick={onEditChannel}
-            title="Edit channel members"
-          >
-            ⚙️
-          </button>
-        )}
+      <div className="p-3 px-4 border-b border-border">
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground/60 text-xl">#</span>
+          <span className="font-semibold">{channelName}</span>
+          <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-medium', badge.className)}>{badge.label}</span>
+          {channel.positioning && (
+            <span className="text-xs text-muted-foreground truncate max-w-[200px]" title={channel.positioning}>
+              — {channel.positioning}
+            </span>
+          )}
+          <div className="ml-auto flex items-center gap-1">
+            {onToggleTodo && (
+              <button
+                className="cursor-pointer text-muted-foreground hover:text-foreground text-sm px-1.5"
+                onClick={onToggleTodo}
+                title="Toggle TODO panel"
+              >
+                &#9745;
+              </button>
+            )}
+            {onOpenSettings && (
+              <button
+                className="cursor-pointer text-muted-foreground hover:text-foreground"
+                onClick={onOpenSettings}
+                title="Channel settings"
+              >
+                &#9881;&#65039;
+              </button>
+            )}
+            {onEditChannel && (
+              <button
+                className="cursor-pointer text-muted-foreground hover:text-foreground text-sm"
+                onClick={onEditChannel}
+                title="Edit channel members"
+              >
+                &#128101;
+              </button>
+            )}
+          </div>
+        </div>
       </div>
       <ScrollArea className="flex-1">
         <div className="p-4" ref={listRef}>
