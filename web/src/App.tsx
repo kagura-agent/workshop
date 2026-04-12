@@ -127,6 +127,15 @@ export default function App() {
       case 'notification_badge':
         setNotificationBadges((prev) => ({ ...prev, [msg.channelId]: msg.unreadCount }));
         break;
+      case 'agent_registered':
+        setAgents((prev) => [...prev, msg.agent]);
+        break;
+      case 'agent_updated':
+        setAgents((prev) => prev.map((a) => a.id === msg.agent.id ? msg.agent : a));
+        break;
+      case 'agent_removed':
+        setAgents((prev) => prev.filter((a) => a.id !== msg.id));
+        break;
       case 'error':
         console.error('[workshop]', msg.message);
         break;
@@ -166,6 +175,18 @@ export default function App() {
 
   const handleNotificationMarkRead = (channelId: string) => {
     send({ type: 'notification_mark_read', channelId });
+  };
+
+  const handleRegisterAgent = (agent: { id: string; name: string; avatar?: string }) => {
+    send({ type: 'register_agent', agent });
+  };
+
+  const handleUpdateAgent = (id: string, updates: Partial<{ name: string; avatar: string }>) => {
+    send({ type: 'update_agent', id, updates });
+  };
+
+  const handleRemoveAgent = (id: string) => {
+    send({ type: 'remove_agent', id });
   };
 
   // Request pins when active channel changes
@@ -232,7 +253,12 @@ export default function App() {
           onSetNorthStar={handleSetNorthStar}
         />
       )}
-      <AgentList agents={agents} />
+      <AgentList
+        agents={agents}
+        onRegisterAgent={handleRegisterAgent}
+        onUpdateAgent={handleUpdateAgent}
+        onRemoveAgent={handleRemoveAgent}
+      />
       {editingChannel && activeChannel && (
         <CreateChannelDialog
           agents={agents}

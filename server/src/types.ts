@@ -76,7 +76,10 @@ export type ClientMessage =
   | { type: 'patrol_config_get' }
   | { type: 'patrol_config_set'; config: Partial<PatrolConfig> }
   | { type: 'patrol_trigger' }
-  | { type: 'notification_mark_read'; channelId: string };
+  | { type: 'notification_mark_read'; channelId: string }
+  | { type: 'register_agent'; agent: { id: string; name: string; avatar?: string } }
+  | { type: 'update_agent'; id: string; updates: Partial<{ name: string; avatar: string }> }
+  | { type: 'remove_agent'; id: string };
 
 // WebSocket protocol: server → client
 export type ServerMessage =
@@ -102,6 +105,9 @@ export type ServerMessage =
   | { type: 'patrol_fired'; controlChannelId: string }
   | { type: 'notification'; notification: Notification }
   | { type: 'notification_badge'; channelId: string; unreadCount: number }
+  | { type: 'agent_registered'; agent: Agent }
+  | { type: 'agent_updated'; agent: Agent }
+  | { type: 'agent_removed'; id: string }
   | { type: 'error'; message: string };
 
 export interface NorthStar {

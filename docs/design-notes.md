@@ -32,6 +32,7 @@
 4. **Isolation by default, communication by intent** — Agents don't see everything. They communicate when needed, explicitly.
 5. **Platform-agnostic core** — Works on Discord today, should work on Slack/Feishu tomorrow.
 6. **Dogfood-driven** — We build what we need, then generalize.
+7. **Runtime-dynamic, no restarts** — Every management operation (channels, agents, config) must be achievable at runtime through the API/UI. No operation should require a server restart. This is a hard constraint, not a nice-to-have. (Lesson from OpenClaw Discord allowlist requiring gateway restart on config change — openclaw#59372.)
 
 ## Open Questions
 
