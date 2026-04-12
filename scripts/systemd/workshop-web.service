@@ -1,0 +1,14 @@
+[Unit]
+Description=Workshop Vite Dev Server (port 5173)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/kagura/.openclaw/workspace/workshop/web
+ExecStart=/home/kagura/.nvm/versions/node/v22.22.2/bin/npx vite --host 0.0.0.0
+Restart=on-failure
+RestartSec=3
+Environment=PATH=/home/kagura/.nvm/versions/node/v22.22.2/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target
