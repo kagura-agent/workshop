@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { renderMessageContent } from '@/lib/mentions';
-import type { Agent, Channel, Message, Pin } from '../types';
+import type { Agent, Channel, Message, Pin, Notification } from '../types';
 
 const TYPE_BADGE: Record<string, { label: string; className: string }> = {
   project: { label: 'Project', className: 'bg-discord-accent/20 text-discord-accent' },
@@ -16,13 +16,16 @@ interface ChatViewProps {
   channelAgents: Agent[];
   typingNames: string[];
   pins: Pin[];
+  notifications: Notification[];
+  isPatrolChannel: boolean;
   onSendMessage: (content: string) => void;
   onEditChannel?: () => void;
   onOpenSettings?: () => void;
   onToggleTodo?: () => void;
+  onPatrolTrigger?: () => void;
 }
 
-export function ChatView({ channel, messages, channelAgents, typingNames, pins, onSendMessage, onEditChannel, onOpenSettings, onToggleTodo }: ChatViewProps) {
+export function ChatView({ channel, messages, channelAgents, typingNames, pins, notifications, isPatrolChannel, onSendMessage, onEditChannel, onOpenSettings, onToggleTodo, onPatrolTrigger }: ChatViewProps) {
   const [input, setInput] = useState('');
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -128,6 +131,10 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
   const channelName = channel.name;
   const badge = TYPE_BADGE[channel.type] ?? TYPE_BADGE.project;
 
+  // Compute agent last active time
+  const lastAgentMessage = [...messages].reverse().find(m => m.role === 'assistant');
+  const agentLastActive = lastAgentMessage ? formatTime(lastAgentMessage.timestamp) : null;
+
   return (
     <div className="flex-1 flex flex-col bg-muted">
       <div className="p-3 px-4 border-b border-border">
@@ -140,7 +147,21 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
               — {channel.positioning}
             </span>
           )}
+          {agentLastActive && (
+            <span className="text-[10px] text-muted-foreground/60 ml-1">
+              Agent active: {agentLastActive}
+            </span>
+          )}
           <div className="ml-auto flex items-center gap-1">
+            {isPatrolChannel && onPatrolTrigger && (
+              <button
+                className="cursor-pointer text-yellow-400 hover:text-yellow-300 text-sm px-1.5"
+                onClick={onPatrolTrigger}
+                title="Run patrol now"
+              >
+                &#128737;
+              </button>
+            )}
             {onToggleTodo && (
               <button
                 className="cursor-pointer text-muted-foreground hover:text-foreground text-sm px-1.5"
@@ -216,7 +237,13 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
             </div>
           )}
           {messages.map((msg) => (
-            <div key={msg.id} className="flex gap-3 py-1 mb-2">
+            <div
+              key={msg.id}
+              className={cn(
+                'flex gap-3 py-1 mb-2',
+                msg.isUrgent && 'border-l-2 border-red-500 pl-2'
+              )}
+            >
               <div
                 className={cn(
                   'w-10 h-10 rounded-full flex items-center justify-center text-base font-semibold shrink-0 text-white',
@@ -229,9 +256,31 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
                 <div className="flex items-baseline gap-2 mb-0.5">
                   <span className="font-semibold text-sm">{msg.senderName}</span>
                   <span className="text-[11px] text-muted-foreground">{formatTime(msg.timestamp)}</span>
+                  {msg.isUrgent && (
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400 uppercase">Urgent</span>
+                  )}
                 </div>
                 <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">
                   {renderMessageContent(msg.content, channelAgents)}
+                </div>
+              </div>
+            </div>
+          ))}
+          {notifications.filter(n => !n.read).map((notif) => (
+            <div key={notif.id} className="flex gap-3 py-1 mb-2 border-l-2 border-blue-400 pl-2 bg-blue-400/5 rounded-r">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center text-base font-semibold shrink-0 bg-blue-500 text-white">
+                &#8644;
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-baseline gap-2 mb-0.5">
+                  <span className="font-semibold text-sm text-blue-400">Cross-post</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    from #{notif.sourceChannelId}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">{formatTime(notif.createdAt)}</span>
+                </div>
+                <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">
+                  {notif.content}
                 </div>
               </div>
             </div>

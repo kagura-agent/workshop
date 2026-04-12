@@ -2,7 +2,8 @@ import * as cron from 'node-cron';
 import type { ScheduledTask } from 'node-cron';
 import { v4 as uuid } from 'uuid';
 import { getDb } from './db.js';
-import type { Channel, Agent, CronExecution } from './types.js';
+import { getPatrolConfig, assemblePatrolPrompt, markPatrolFired } from './patrol.js';
+import type { Channel, Agent, CronExecution, PatrolConfig } from './types.js';
 
 export type SendChatFn = (content: string, channelId: string, agentId: string) => void;
 
@@ -15,6 +16,7 @@ export type SendChatFn = (content: string, channelId: string, agentId: string) =
  */
 export class ChannelCronManager {
   private tasks = new Map<string, ScheduledTask>();
+  private patrolTask: ScheduledTask | null = null;
   private sendChat: SendChatFn;
   private agents: Map<string, Agent>;
 
@@ -177,6 +179,11 @@ export class ChannelCronManager {
       console.log(`[cron] stopped channel=${channelId}`);
     }
     this.tasks.clear();
+    if (this.patrolTask) {
+      this.patrolTask.stop();
+      this.patrolTask = null;
+      console.log('[cron] stopped patrol');
+    }
   }
 
   /** Sync all channels from DB on startup. */
@@ -211,5 +218,85 @@ export class ChannelCronManager {
     }
 
     console.log(`[cron] synced ${rows.length} channel(s) from DB`);
+
+    // Sync patrol
+    const patrolConfig = getPatrolConfig();
+    if (patrolConfig) {
+      this.syncPatrol(patrolConfig);
+    }
+  }
+
+  /** Sync patrol cron job from config. Call when patrol config changes. */
+  syncPatrol(config: PatrolConfig): void {
+    if (this.patrolTask) {
+      this.patrolTask.stop();
+      this.patrolTask = null;
+    }
+
+    if (!config.enabled || !config.schedule || !config.controlChannelId) return;
+
+    if (!cron.validate(config.schedule)) {
+      console.warn(`[cron] invalid patrol schedule: "${config.schedule}"`);
+      return;
+    }
+
+    this.patrolTask = cron.schedule(config.schedule, () => {
+      this.executePatrol();
+    });
+
+    console.log(`[cron] patrol scheduled: "${config.schedule}" → #${config.controlChannelId}`);
+  }
+
+  /** Execute patrol: assemble prompt and send to control channel agents. */
+  executePatrol(): void {
+    const config = getPatrolConfig();
+    if (!config || !config.controlChannelId) {
+      console.warn('[cron] patrol: no config');
+      return;
+    }
+
+    const prompt = assemblePatrolPrompt(config.controlChannelId, config.lastPatrolAt, config.channelFilter);
+    markPatrolFired();
+
+    const db = getDb();
+    const channelAgents = db.prepare(
+      'SELECT agent_id, require_mention FROM channel_agents WHERE channel_id = ?'
+    ).all(config.controlChannelId) as { agent_id: string; require_mention: number }[];
+
+    const targets = channelAgents.filter(a => !a.require_mention);
+    if (targets.length === 0) {
+      console.log('[cron] patrol: no non-requireMention agents in control channel');
+      return;
+    }
+
+    console.log(`[cron] patrol firing → ${targets.length} agent(s) in #${config.controlChannelId}`);
+
+    for (const { agent_id } of targets) {
+      this.sendChat(prompt, config.controlChannelId, agent_id);
+    }
+
+    // Log as a cron execution
+    const executionId = uuid();
+    const now = new Date().toISOString();
+    db.prepare(
+      'INSERT INTO cron_executions (id, channel_id, fired_at, agent_ids, prompt_snippet, status) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(executionId, config.controlChannelId, now, JSON.stringify(targets.map(a => a.agent_id)), prompt.slice(0, 500), 'sent');
+  }
+
+  /** Reset cron timer for a channel (for @urgent intervention). */
+  resetTimer(channelId: string): void {
+    const existing = this.tasks.get(channelId);
+    if (!existing) return;
+
+    const db = getDb();
+    const row = db.prepare('SELECT cron_schedule, cron_enabled FROM channels WHERE id = ?').get(channelId) as any;
+    if (!row || !row.cron_enabled || !row.cron_schedule) return;
+
+    existing.stop();
+    const task = cron.schedule(row.cron_schedule, () => {
+      this.executeCron(channelId);
+    });
+    this.tasks.set(channelId, task);
+    console.log(`[cron] timer reset for channel=${channelId}`);
   }
 }
