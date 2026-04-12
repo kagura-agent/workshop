@@ -71,6 +71,7 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  isUrgent: boolean;
 }
 
 // Messages from server
@@ -92,6 +93,10 @@ export type ServerMessage =
   | { type: 'north_star_list'; stars: NorthStar[] }
   | { type: 'pin_list'; channelId: string; pins: Pin[] }
   | { type: 'pin_updated'; channelId: string; pin: Pin }
+  | { type: 'patrol_config'; config: PatrolConfig | null }
+  | { type: 'patrol_fired'; controlChannelId: string }
+  | { type: 'notification'; notification: Notification }
+  | { type: 'notification_badge'; channelId: string; unreadCount: number }
   | { type: 'error'; message: string };
 
 // Messages from client → server
@@ -110,7 +115,11 @@ export type ClientMessage =
   | { type: 'cron_history'; channelId: string }
   | { type: 'north_star_get'; scope?: string }
   | { type: 'north_star_set'; scope: string; content: string }
-  | { type: 'pin_list'; channelId: string };
+  | { type: 'pin_list'; channelId: string }
+  | { type: 'patrol_config_get' }
+  | { type: 'patrol_config_set'; config: Partial<PatrolConfig> }
+  | { type: 'patrol_trigger' }
+  | { type: 'notification_mark_read'; channelId: string };
 
 export interface CreateChannelDialogProps {
   agents: Agent[];
@@ -121,4 +130,25 @@ export interface CreateChannelDialogProps {
     name: string;
     agents: { id: string; requireMention: boolean }[];
   };
+}
+
+export interface PatrolConfig {
+  controlChannelId: string;
+  schedule: string;
+  enabled: boolean;
+  lastPatrolAt: string | null;
+  channelFilter: string[];
+}
+
+export type NotificationTrigger = 'todo_change' | 'agent_crosspost' | 'patrol';
+
+export interface Notification {
+  id: string;
+  sourceChannelId: string;
+  targetChannelId: string;
+  content: string;
+  trigger: NotificationTrigger;
+  todoItemId: string | null;
+  createdAt: string;
+  read: boolean;
 }

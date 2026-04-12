@@ -128,6 +128,40 @@ function initSchema(): void {
       FOREIGN KEY (channel_id) REFERENCES channels(id)
     );
   `);
+
+  // v0.3 §4: Patrol config
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS patrol_config (
+      id TEXT PRIMARY KEY DEFAULT 'default',
+      control_channel_id TEXT NOT NULL,
+      schedule TEXT NOT NULL DEFAULT '0 */3 * * *',
+      enabled INTEGER NOT NULL DEFAULT 0,
+      last_patrol_at TEXT,
+      channel_filter TEXT NOT NULL DEFAULT '[]',
+      FOREIGN KEY (control_channel_id) REFERENCES channels(id)
+    );
+  `);
+
+  // v0.3 §5: Notifications
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      source_channel_id TEXT NOT NULL,
+      target_channel_id TEXT NOT NULL,
+      content TEXT NOT NULL,
+      trigger_type TEXT NOT NULL,
+      todo_item_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      read INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (source_channel_id) REFERENCES channels(id),
+      FOREIGN KEY (target_channel_id) REFERENCES channels(id)
+    );
+  `);
+
+  // v0.3 §6: Urgent flag on messages
+  if (!hasColumn(d, 'messages', 'is_urgent')) {
+    d.exec("ALTER TABLE messages ADD COLUMN is_urgent INTEGER NOT NULL DEFAULT 0");
+  }
 }
 
 export function close(): void {

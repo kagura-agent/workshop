@@ -6,7 +6,7 @@ import { CreateChannelDialog } from './components/CreateChannelDialog';
 import { ChannelSettingsPanel } from './components/ChannelSettingsPanel';
 import { TodoPanel } from './components/TodoPanel';
 import { useWebSocket } from './hooks/useWebSocket';
-import type { Channel, Agent, Message, ServerMessage, TodoItem, NorthStar, Pin } from './types';
+import type { Channel, Agent, Message, ServerMessage, TodoItem, NorthStar, Pin, PatrolConfig, Notification } from './types';
 
 const WS_URL = `ws://${window.location.hostname}:3100`;
 
@@ -22,6 +22,9 @@ export default function App() {
   const [todoItems, setTodoItems] = useState<TodoItem[]>([]);
   const [northStars, setNorthStars] = useState<NorthStar[]>([]);
   const [pins, setPins] = useState<Record<string, Pin[]>>({});
+  const [patrolConfig, setPatrolConfigState] = useState<PatrolConfig | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationBadges, setNotificationBadges] = useState<Record<string, number>>({});
 
   const handleMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
@@ -104,6 +107,18 @@ export default function App() {
           return { ...prev, [msg.channelId]: updated };
         });
         break;
+      case 'patrol_config':
+        setPatrolConfigState(msg.config);
+        break;
+      case 'patrol_fired':
+        console.log('[patrol] fired for', msg.controlChannelId);
+        break;
+      case 'notification':
+        setNotifications((prev) => [...prev, msg.notification]);
+        break;
+      case 'notification_badge':
+        setNotificationBadges((prev) => ({ ...prev, [msg.channelId]: msg.unreadCount }));
+        break;
       case 'error':
         console.error('[workshop]', msg.message);
         break;
@@ -133,10 +148,25 @@ export default function App() {
     send({ type: 'north_star_set', scope, content });
   };
 
+  const handlePatrolConfigSet = (config: Partial<PatrolConfig>) => {
+    send({ type: 'patrol_config_set', config });
+  };
+
+  const handlePatrolTrigger = () => {
+    send({ type: 'patrol_trigger' });
+  };
+
+  const handleNotificationMarkRead = (channelId: string) => {
+    send({ type: 'notification_mark_read', channelId });
+  };
+
   // Request pins when active channel changes
   useEffect(() => {
     if (activeChannelId && connected) {
       send({ type: 'pin_list', channelId: activeChannelId });
+      if (notificationBadges[activeChannelId] > 0) {
+        send({ type: 'notification_mark_read', channelId: activeChannelId });
+      }
     }
   }, [activeChannelId, connected, send]);
 
@@ -159,6 +189,8 @@ export default function App() {
         channels={channels}
         agents={agents}
         activeChannelId={activeChannelId}
+        notificationBadges={notificationBadges}
+        patrolControlChannelId={patrolConfig?.controlChannelId ?? null}
         onSelectChannel={setActiveChannelId}
         onCreateChannel={handleCreateChannel}
         onOpenSettings={(channelId) => { setActiveChannelId(channelId); setShowChannelSettings(true); }}
@@ -169,10 +201,13 @@ export default function App() {
         channelAgents={channelAgents}
         typingNames={typingNames}
         pins={activeChannelId ? (pins[activeChannelId] || []) : []}
+        notifications={notifications.filter(n => n.targetChannelId === activeChannelId)}
+        isPatrolChannel={patrolConfig?.controlChannelId === activeChannelId}
         onSendMessage={handleSendMessage}
         onEditChannel={activeChannel ? handleEditChannel : undefined}
         onOpenSettings={activeChannel ? () => setShowChannelSettings(true) : undefined}
         onToggleTodo={() => setShowTodoPanel((v) => !v)}
+        onPatrolTrigger={handlePatrolTrigger}
       />
       {showTodoPanel && (
         <TodoPanel
@@ -204,11 +239,14 @@ export default function App() {
       {showChannelSettings && activeChannel && (
         <ChannelSettingsPanel
           channel={activeChannel}
+          patrolConfig={patrolConfig}
+          channels={channels}
           onClose={() => setShowChannelSettings(false)}
           onSave={(metadata) => {
             handleUpdateChannelMeta(activeChannel.id, metadata);
             setShowChannelSettings(false);
           }}
+          onPatrolConfigSave={handlePatrolConfigSet}
         />
       )}
       {!connected && (

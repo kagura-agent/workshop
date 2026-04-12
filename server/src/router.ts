@@ -3,7 +3,8 @@ import type WebSocket from 'ws';
 import { getDb } from './db.js';
 import { GatewayConnection } from './gateway.js';
 import { ChannelCronManager } from './cron.js';
-import type { ClientMessage, ServerMessage, Message, Channel, Agent, TodoItem, CronExecution, NorthStar, Pin } from './types.js';
+import { getPatrolConfig, setPatrolConfig } from './patrol.js';
+import type { ClientMessage, ServerMessage, Message, Channel, Agent, TodoItem, CronExecution, NorthStar, Pin, PatrolConfig, Notification, NotificationTrigger } from './types.js';
 
 /**
  * Router — bridges frontend WebSocket clients with a single shared OpenClaw Gateway connection.
@@ -26,6 +27,8 @@ export class Router {
 
     // Send message history for all active channels
     this.sendAllChannelHistory(ws);
+    this.sendAllNotificationBadges(ws);
+    this.handlePatrolConfigGet(ws);
 
     ws.on('message', (raw) => {
       try {
@@ -76,6 +79,9 @@ export class Router {
 
       const msg = this.storeMessage(channelId, agentId, senderName, 'assistant', content);
       this.broadcast({ type: 'message', channelId, message: msg });
+
+      // Parse @notify cross-posts in agent responses
+      this.parseNotifyCommands(channelId, content);
     };
 
     gw.onStatusChange = (status) => {
@@ -154,14 +160,35 @@ export class Router {
       case 'pin_list':
         this.handlePinList(ws, msg.channelId);
         break;
+      case 'patrol_config_get':
+        this.handlePatrolConfigGet(ws);
+        break;
+      case 'patrol_config_set':
+        this.handlePatrolConfigSet(msg.config);
+        break;
+      case 'patrol_trigger':
+        this.handlePatrolTrigger();
+        break;
+      case 'notification_mark_read':
+        this.handleNotificationMarkRead(msg.channelId);
+        break;
       default:
         this.sendTo(ws, { type: 'error', message: 'Unknown message type' });
     }
   }
 
   private handleSendMessage(channelId: string, content: string): void {
+    // Check for @urgent prefix
+    const urgentPattern = /^@urgent\s+/i;
+    const isUrgent = urgentPattern.test(content);
+    const messageContent = isUrgent ? content.replace(urgentPattern, '') : content;
+
+    if (isUrgent) {
+      console.log(`[msg] URGENT message in channel=${channelId}`);
+    }
+
     // Store human message
-    const msg = this.storeMessage(channelId, 'user', 'You', 'user', content);
+    const msg = this.storeMessage(channelId, 'user', 'You', 'user', content, isUrgent);
     console.log(`[msg] user → channel=${channelId}: "${content.slice(0, 80)}"`);
     this.broadcast({ type: 'message', channelId, message: msg });
 
@@ -170,12 +197,29 @@ export class Router {
       return;
     }
 
+    // For urgent messages: prepend channel guidelines to give agent context
+    let sendContent = content;
+    if (isUrgent) {
+      const db = getDb();
+      const row = db.prepare('SELECT guidelines FROM channels WHERE id = ?').get(channelId) as any;
+      if (row?.guidelines) {
+        sendContent = `[URGENT — Channel Guidelines]\n${row.guidelines}\n\n[Urgent Message]\n${messageContent}`;
+      }
+
+      // Reset cron timer so the next cron doesn't fire too soon
+      if (this.cronManager) {
+        this.cronManager.resetTimer(channelId);
+      }
+    }
+
     // Parse @mentions from message (case-insensitive)
     const mentionPattern = /@(\w[\w-]*)/g;
     const mentions = new Set<string>();
     let match: RegExpExecArray | null;
     while ((match = mentionPattern.exec(content)) !== null) {
-      mentions.add(match[1].toLowerCase());
+      const name = match[1].toLowerCase();
+      if (name === 'urgent' || name === 'notify') continue;
+      mentions.add(name);
     }
 
     // Forward to agents based on requireMention rules
@@ -184,15 +228,12 @@ export class Router {
       'SELECT agent_id, require_mention FROM channel_agents WHERE channel_id = ?'
     ).all(channelId) as { agent_id: string; require_mention: number }[];
 
-    const hasMentions = mentions.size > 0;
-
     for (const { agent_id, require_mention } of channelAgents) {
       const agent = this.agents.get(agent_id);
       const agentName = agent?.name?.toLowerCase() ?? '';
       const mentioned = mentions.has(agent_id.toLowerCase()) || mentions.has(agentName);
 
       if (require_mention && !mentioned) {
-        // Agent requires mention but wasn't mentioned — skip
         console.log(`[msg] skipping agent=${agent_id} channel=${channelId} (requireMention=true, not mentioned)`);
         continue;
       }
@@ -203,7 +244,7 @@ export class Router {
         console.log(`[msg] forwarding to agent=${agent_id} channel=${channelId} (requireMention=false, sees all)`);
       }
 
-      this.gateway.sendChat(content, channelId, agent_id);
+      this.gateway.sendChat(sendContent, channelId, agent_id);
     }
   }
 
@@ -413,6 +454,27 @@ export class Router {
     const row = db.prepare('SELECT * FROM todo_items WHERE id = ?').get(id) as any;
     this.broadcast({ type: 'todo_updated', item: this.mapTodoRow(row) });
     this.syncTodoSectionPins(row.section);
+
+    // §5: Notify other channels linked to this section when status changes
+    if (updates.status && updates.status !== existing.status) {
+      const section = row.section;
+      const linkedChannels = db.prepare(
+        'SELECT id, name FROM channels WHERE todo_section = ?'
+      ).all(section) as any[];
+
+      const sourceChannelId = row.assigned_channel || (linkedChannels[0]?.id ?? '');
+
+      for (const ch of linkedChannels) {
+        if (ch.id === sourceChannelId) continue;
+        this.postNotification(
+          sourceChannelId,
+          ch.id,
+          `TODO [${section}] "${row.content.slice(0, 60)}": ${existing.status} → ${updates.status}`,
+          'todo_change',
+          row.id,
+        );
+      }
+    }
   }
 
   private handleTodoDelete(id: string): void {
@@ -629,6 +691,7 @@ export class Router {
           role: r.role,
           content: r.content,
           timestamp: r.timestamp,
+          isUrgent: !!r.is_urgent,
         };
         this.sendTo(ws, { type: 'message', channelId, message: msg });
       }
@@ -637,17 +700,122 @@ export class Router {
 
   private storeMessage(
     channelId: string, senderId: string, senderName: string,
-    role: 'user' | 'assistant', content: string
+    role: 'user' | 'assistant', content: string, isUrgent = false
   ): Message {
     const db = getDb();
     const id = uuid();
     const timestamp = new Date().toISOString();
 
     db.prepare(
-      'INSERT INTO messages (id, channel_id, sender_id, sender_name, role, content, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(id, channelId, senderId, senderName, role, content, timestamp);
+      'INSERT INTO messages (id, channel_id, sender_id, sender_name, role, content, timestamp, is_urgent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(id, channelId, senderId, senderName, role, content, timestamp, isUrgent ? 1 : 0);
 
-    return { id, channelId, senderId, senderName, role, content, timestamp };
+    return { id, channelId, senderId, senderName, role, content, timestamp, isUrgent };
+  }
+
+  // --- Patrol handlers ---
+
+  private handlePatrolConfigGet(ws: WebSocket): void {
+    const config = getPatrolConfig();
+    this.sendTo(ws, { type: 'patrol_config', config });
+  }
+
+  private handlePatrolConfigSet(updates: Partial<PatrolConfig>): void {
+    const config = setPatrolConfig(updates);
+    this.broadcast({ type: 'patrol_config', config });
+
+    if (this.cronManager) {
+      this.cronManager.syncPatrol(config);
+    }
+  }
+
+  private handlePatrolTrigger(): void {
+    if (!this.cronManager) return;
+    this.cronManager.executePatrol();
+
+    const config = getPatrolConfig();
+    if (config) {
+      this.broadcast({ type: 'patrol_fired', controlChannelId: config.controlChannelId });
+    }
+  }
+
+  // --- Notification handlers ---
+
+  /** Create and broadcast a notification. */
+  private postNotification(
+    sourceChannelId: string,
+    targetChannelId: string,
+    content: string,
+    trigger: 'todo_change' | 'agent_crosspost' | 'patrol',
+    todoItemId?: string,
+  ): void {
+    const db = getDb();
+    const id = uuid();
+    const now = new Date().toISOString();
+
+    db.prepare(
+      'INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, todo_item_id, created_at, read) VALUES (?, ?, ?, ?, ?, ?, ?, 0)'
+    ).run(id, sourceChannelId, targetChannelId, content, trigger, todoItemId ?? null, now);
+
+    const notification: Notification = {
+      id, sourceChannelId, targetChannelId, content, trigger,
+      todoItemId: todoItemId ?? null, createdAt: now, read: false,
+    };
+
+    this.broadcast({ type: 'notification', notification });
+    this.broadcastNotificationBadge(targetChannelId);
+  }
+
+  private handleNotificationMarkRead(channelId: string): void {
+    const db = getDb();
+    db.prepare('UPDATE notifications SET read = 1 WHERE target_channel_id = ? AND read = 0').run(channelId);
+    this.broadcastNotificationBadge(channelId);
+  }
+
+  private broadcastNotificationBadge(channelId: string): void {
+    const db = getDb();
+    const row = db.prepare(
+      'SELECT COUNT(*) as cnt FROM notifications WHERE target_channel_id = ? AND read = 0'
+    ).get(channelId) as any;
+    this.broadcast({ type: 'notification_badge', channelId, unreadCount: row?.cnt ?? 0 });
+  }
+
+  /** Send notification badges for all channels to a newly connected client. */
+  private sendAllNotificationBadges(ws: WebSocket): void {
+    const db = getDb();
+    const rows = db.prepare(
+      'SELECT target_channel_id, COUNT(*) as cnt FROM notifications WHERE read = 0 GROUP BY target_channel_id'
+    ).all() as any[];
+
+    for (const row of rows) {
+      this.sendTo(ws, { type: 'notification_badge', channelId: row.target_channel_id, unreadCount: row.cnt });
+    }
+  }
+
+  /** Parse @notify #channel-name: message patterns in agent responses. */
+  private parseNotifyCommands(sourceChannelId: string, content: string): void {
+    const pattern = /@notify\s+#([\w-]+):\s*(.+?)(?=@notify\s+#|$)/gs;
+    let match: RegExpExecArray | null;
+
+    while ((match = pattern.exec(content)) !== null) {
+      const targetName = match[1];
+      const notifyContent = match[2].trim();
+
+      const db = getDb();
+      const targetChannel = db.prepare(
+        "SELECT id FROM channels WHERE LOWER(name) = LOWER(?)"
+      ).get(targetName) as any;
+
+      if (!targetChannel) {
+        console.warn(`[notify] target channel not found: #${targetName}`);
+        continue;
+      }
+
+      if (targetChannel.id === sourceChannelId) continue;
+
+      console.log(`[notify] #${sourceChannelId} → #${targetChannel.id}: "${notifyContent.slice(0, 80)}"`);
+      this.postNotification(sourceChannelId, targetChannel.id, notifyContent, 'agent_crosspost');
+    }
   }
 
   private broadcast(msg: ServerMessage): void {
