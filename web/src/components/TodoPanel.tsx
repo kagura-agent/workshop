@@ -15,13 +15,15 @@ interface TodoPanelProps {
   onSetNorthStar: (scope: string, content: string) => void;
 }
 
+type ViewMode = 'list' | 'kanban';
+
 const STATUS_CYCLE: TodoStatus[] = ['pending', 'in_progress', 'review', 'done'];
 
-const STATUS_CONFIG: Record<TodoStatus, { label: string; color: string; bg: string }> = {
-  pending: { label: 'Pending', color: 'text-muted-foreground', bg: 'bg-muted-foreground/20' },
-  in_progress: { label: 'In Progress', color: 'text-blue-400', bg: 'bg-blue-400/20' },
-  review: { label: 'Review', color: 'text-yellow-400', bg: 'bg-yellow-400/20' },
-  done: { label: 'Done', color: 'text-green-400', bg: 'bg-green-400/20' },
+const STATUS_CONFIG: Record<TodoStatus, { label: string; color: string; bg: string; headerBg: string }> = {
+  pending: { label: 'Pending', color: 'text-muted-foreground', bg: 'bg-muted-foreground/20', headerBg: 'bg-muted-foreground/10' },
+  in_progress: { label: 'In Progress', color: 'text-blue-400', bg: 'bg-blue-400/20', headerBg: 'bg-blue-400/10' },
+  review: { label: 'Review', color: 'text-yellow-400', bg: 'bg-yellow-400/20', headerBg: 'bg-yellow-400/10' },
+  done: { label: 'Done', color: 'text-green-400', bg: 'bg-green-400/20', headerBg: 'bg-green-400/10' },
 };
 
 function isStale(updatedAt: string): boolean {
@@ -34,15 +36,25 @@ export function TodoPanel({ items, northStars, onClose, onCreate, onUpdate, onDe
   const [newContent, setNewContent] = useState('');
   const [editingNorthStar, setEditingNorthStar] = useState(false);
   const [northStarDraft, setNorthStarDraft] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
 
   const globalStar = northStars.find((s) => s.scope === 'global');
 
-  // Group by section
+  // Group by section (for list view)
   const sections = new Map<string, TodoItem[]>();
   for (const item of items) {
     const list = sections.get(item.section) || [];
     list.push(item);
     sections.set(item.section, list);
+  }
+
+  // Group by status (for kanban view)
+  const columns = new Map<TodoStatus, TodoItem[]>();
+  for (const status of STATUS_CYCLE) {
+    columns.set(status, []);
+  }
+  for (const item of items) {
+    columns.get(item.status)!.push(item);
   }
 
   const handleAdd = () => {
@@ -59,12 +71,37 @@ export function TodoPanel({ items, northStars, onClose, onCreate, onUpdate, onDe
   };
 
   return (
-    <div className="w-72 bg-card border-l border-border flex flex-col shrink-0">
+    <div className={cn(
+      'bg-card border-l border-border flex flex-col shrink-0 transition-[width] duration-200',
+      viewMode === 'kanban' ? 'w-[800px]' : 'w-72'
+    )}>
       <div className="p-3 px-4 font-semibold text-sm border-b border-border flex items-center justify-between">
         <span>TODO</span>
-        <button className="text-muted-foreground hover:text-foreground cursor-pointer text-lg leading-none" onClick={onClose}>
-          &times;
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            className={cn(
+              'px-1.5 py-0.5 rounded text-xs cursor-pointer',
+              viewMode === 'list' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
+            )}
+            onClick={() => setViewMode('list')}
+            title="List view"
+          >
+            &#9776;
+          </button>
+          <button
+            className={cn(
+              'px-1.5 py-0.5 rounded text-xs cursor-pointer',
+              viewMode === 'kanban' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
+            )}
+            onClick={() => setViewMode('kanban')}
+            title="Kanban view"
+          >
+            &#8862;
+          </button>
+          <button className="text-muted-foreground hover:text-foreground cursor-pointer text-lg leading-none ml-2" onClick={onClose}>
+            &times;
+          </button>
+        </div>
       </div>
 
       {/* North Star section */}
@@ -106,51 +143,119 @@ export function TodoPanel({ items, northStars, onClose, onCreate, onUpdate, onDe
         )}
       </div>
 
-      <ScrollArea className="flex-1">
-        <div className="p-3 space-y-4">
-          {sections.size === 0 && (
-            <div className="text-muted-foreground text-xs text-center py-4">No todo items yet</div>
-          )}
-          {Array.from(sections.entries()).map(([section, sectionItems]) => (
-            <div key={section}>
-              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">{section}</div>
-              <div className="space-y-1">
-                {sectionItems.map((item) => {
-                  const cfg = STATUS_CONFIG[item.status];
-                  const stale = item.status !== 'done' && isStale(item.updatedAt);
-                  return (
-                    <div
-                      key={item.id}
-                      className={cn(
-                        'group flex items-start gap-2 p-2 rounded text-sm hover:bg-muted',
-                        stale && 'border-l-2 border-orange-400'
-                      )}
-                    >
-                      <button
-                        className={cn('shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer', cfg.bg, cfg.color)}
-                        onClick={() => cycleStatus(item)}
-                        title={`Status: ${cfg.label} — click to cycle`}
+      {/* List view */}
+      {viewMode === 'list' && (
+        <ScrollArea className="flex-1">
+          <div className="p-3 space-y-4">
+            {sections.size === 0 && (
+              <div className="text-muted-foreground text-xs text-center py-4">No todo items yet</div>
+            )}
+            {Array.from(sections.entries()).map(([section, sectionItems]) => (
+              <div key={section}>
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">{section}</div>
+                <div className="space-y-1">
+                  {sectionItems.map((item) => {
+                    const cfg = STATUS_CONFIG[item.status];
+                    const stale = item.status !== 'done' && isStale(item.updatedAt);
+                    return (
+                      <div
+                        key={item.id}
+                        className={cn(
+                          'group flex items-start gap-2 p-2 rounded text-sm hover:bg-muted',
+                          stale && 'border-l-2 border-orange-400'
+                        )}
                       >
-                        {cfg.label}
-                      </button>
-                      <span className={cn('flex-1 break-words', item.status === 'done' && 'line-through text-muted-foreground')}>
-                        {item.content}
-                      </span>
-                      <button
-                        className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive cursor-pointer text-xs"
-                        onClick={() => onDelete(item.id)}
-                        title="Delete"
-                      >
-                        &times;
-                      </button>
-                    </div>
-                  );
-                })}
+                        <button
+                          className={cn('shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer', cfg.bg, cfg.color)}
+                          onClick={() => cycleStatus(item)}
+                          title={`Status: ${cfg.label} — click to cycle`}
+                        >
+                          {cfg.label}
+                        </button>
+                        <span className={cn('flex-1 break-words', item.status === 'done' && 'line-through text-muted-foreground')}>
+                          {item.content}
+                        </span>
+                        <button
+                          className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive cursor-pointer text-xs"
+                          onClick={() => onDelete(item.id)}
+                          title="Delete"
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+        </ScrollArea>
+      )}
+
+      {/* Kanban view */}
+      {viewMode === 'kanban' && (
+        <div className="flex-1 flex gap-2 p-3 overflow-x-auto min-h-0">
+          {STATUS_CYCLE.map((status) => {
+            const cfg = STATUS_CONFIG[status];
+            const colItems = columns.get(status) || [];
+            return (
+              <div key={status} className="flex-1 min-w-[160px] flex flex-col min-h-0">
+                <div className={cn('rounded-t px-2 py-1.5 flex items-center gap-2', cfg.headerBg)}>
+                  <span className={cn('text-xs font-semibold', cfg.color)}>{cfg.label}</span>
+                  <span className="text-[10px] text-muted-foreground">{colItems.length}</span>
+                </div>
+                <ScrollArea className="flex-1 border border-t-0 border-border rounded-b">
+                  <div className="p-1.5 space-y-1.5">
+                    {colItems.length === 0 && (
+                      <div className="text-muted-foreground text-[10px] text-center py-3">Empty</div>
+                    )}
+                    {colItems.map((item) => {
+                      const stale = item.status !== 'done' && isStale(item.updatedAt);
+                      return (
+                        <div
+                          key={item.id}
+                          className={cn(
+                            'group bg-muted/50 rounded p-2 text-xs hover:bg-muted',
+                            stale && 'border-l-2 border-orange-400'
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-1">
+                            <span className={cn('flex-1 break-words', item.status === 'done' && 'line-through text-muted-foreground')}>
+                              {item.content}
+                            </span>
+                            <button
+                              className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive cursor-pointer text-[10px]"
+                              onClick={() => onDelete(item.id)}
+                              title="Delete"
+                            >
+                              &times;
+                            </button>
+                          </div>
+                          <div className="mt-1.5 flex items-center gap-1.5">
+                            <button
+                              className={cn('px-1.5 py-0.5 rounded text-[9px] font-medium cursor-pointer', cfg.bg, cfg.color)}
+                              onClick={() => cycleStatus(item)}
+                              title="Click to advance status"
+                            >
+                              {cfg.label}
+                            </button>
+                            <span className="text-[9px] text-muted-foreground/70 bg-muted-foreground/10 px-1 py-0.5 rounded">
+                              {item.section}
+                            </span>
+                            {stale && (
+                              <span className="text-[9px] text-orange-400" title="Stale — no update in 3+ days">&#9888;</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              </div>
+            );
+          })}
         </div>
-      </ScrollArea>
+      )}
 
       <div className="p-3 border-t border-border space-y-2">
         <Input

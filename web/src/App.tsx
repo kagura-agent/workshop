@@ -5,6 +5,7 @@ import { AgentList } from './components/AgentList';
 import { CreateChannelDialog } from './components/CreateChannelDialog';
 import { ChannelSettingsPanel } from './components/ChannelSettingsPanel';
 import { TodoPanel } from './components/TodoPanel';
+import { CronDashboard } from './components/CronDashboard';
 import { useWebSocket } from './hooks/useWebSocket';
 import type { Channel, Agent, Message, ServerMessage, TodoItem, NorthStar, Pin, PatrolConfig, Notification } from './types';
 
@@ -19,6 +20,7 @@ export default function App() {
   const [editingChannel, setEditingChannel] = useState<boolean>(false);
   const [showChannelSettings, setShowChannelSettings] = useState(false);
   const [showTodoPanel, setShowTodoPanel] = useState(false);
+  const [showCronDashboard, setShowCronDashboard] = useState(false);
   const [todoItems, setTodoItems] = useState<TodoItem[]>([]);
   const [northStars, setNorthStars] = useState<NorthStar[]>([]);
   const [pins, setPins] = useState<Record<string, Pin[]>>({});
@@ -194,6 +196,7 @@ export default function App() {
         onSelectChannel={setActiveChannelId}
         onCreateChannel={handleCreateChannel}
         onOpenSettings={(channelId) => { setActiveChannelId(channelId); setShowChannelSettings(true); }}
+        onOpenCronDashboard={() => setShowCronDashboard(true)}
       />
       <ChatView
         channel={activeChannel ?? null}
@@ -247,6 +250,13 @@ export default function App() {
             setShowChannelSettings(false);
           }}
           onPatrolConfigSave={handlePatrolConfigSet}
+        />
+      )}
+      {showCronDashboard && (
+        <CronDashboard
+          channels={channels}
+          onTrigger={(channelId) => send({ type: 'cron_trigger', channelId })}
+          onClose={() => setShowCronDashboard(false)}
         />
       )}
       {!connected && (
