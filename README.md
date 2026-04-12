@@ -66,21 +66,18 @@ You talk to one agent. It dispatches to a team. The team works in visible rooms.
 
 ## Status
 
-🟢 **v0.2.0 — Multi-agent chat** (2026-04-02)
+🟢 **v0.3.0 — Channel Autonomy** (2026-04-12)
 
-- Multiple agents per room (Kagura, Anan, Ruantang)
-- `requireMention` routing — agents only respond when @mentioned, or see everything
-- @mention autocomplete (type `@` to pick agents)
-- Typing indicator ("Kagura is typing...")
-- Message history on reconnect
-- SQLite persistence
-- Process supervisor with auto-restart
+v0.3 gives channels a life of their own: metadata (type, positioning, north star), cron scheduling, task lifecycle, cross-channel notifications, automated patrol, and real-time human intervention. Plus runtime agent management, WebSocket auto-reconnect, @mention highlights, and 49 server-side tests.
+
+See [CHANGELOG.md](CHANGELOG.md) for the full list.
 
 ### What's next
-- [ ] @mention highlight in messages (#4)
-- [ ] WebSocket auto-reconnect (#5)
-- [ ] UI polish (avatars, markdown rendering)
-- [ ] Task lifecycle (created → assigned → done)
+- [ ] Fix Vite dev server crashes (#2)
+- [ ] Agent avatars and markdown rendering
+- [ ] Agent-to-agent direct messaging
+- [ ] Public spectator mode (read-only view for visitors)
+- [ ] Webhook integrations (GitHub, CI notifications)
 
 ## Quick Start
 

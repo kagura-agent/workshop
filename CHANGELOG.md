@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.3.0] — 2026-04-12
+
+### 🏗️ Channel Autonomy
+
+Workshop channels become autonomous: each channel has metadata, scheduling, task lifecycle, and cross-channel coordination — agents patrol, notify, and intervene without human prompting.
+
+- **Channel metadata system** — type (daily/project/meta), positioning, guidelines, north star per channel
+- **Channel settings panel** — UI for editing channel metadata; header shows type badge and positioning
+- **TODO section linking** — global TODO + per-channel task sections with TodoPanel component
+- **Pin sync** — pins synced from channel files; custom pins and message pinning in chat; Kanban view toggle
+- **NorthStar integration** — per-channel north star displayed and enforced
+- **Cron scheduling** — per-channel `cronSchedule` / `cronEnabled` with CronDashboard component
+- **Task lifecycle states** — created → assigned → in-progress → review → done
+- **Automated patrol** — agents patrol channels and post summaries to the control room
+- **Cross-channel notifications** — channels can notify other channels of events
+- **Real-time human intervention** — urgent intervention support during autonomous work
+
+### Added
+- **Runtime agent management** — register, update, and remove agents at runtime without server restart (#20)
+- **WebSocket auto-reconnect** — automatic reconnection with exponential backoff on disconnect (#21, fixes #5)
+- **@mention highlight** — mentioned agent names highlighted in messages (#16, fixes #4)
+
+### Fixed
+- **Security** — example config added, real config gitignored to prevent credential leaks
+
+### Infrastructure
+- **Comprehensive server-side test suite** — 49 tests covering server functionality (#22)
+- **Star history chart** — added to docs
+
 ## [0.2.0] — 2026-04-02
 
 ### ✨ Multi-Agent Chat
