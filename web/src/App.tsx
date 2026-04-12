@@ -142,7 +142,7 @@ export default function App() {
     }
   }, []);
 
-  const { send, connected } = useWebSocket(WS_URL, handleMessage);
+  const { send, connected, status, reconnectAttempt } = useWebSocket(WS_URL, handleMessage);
 
   const handleSendMessage = (content: string) => {
     if (!activeChannelId) return;
@@ -294,8 +294,13 @@ export default function App() {
           onClose={() => setShowCronDashboard(false)}
         />
       )}
-      {!connected && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded text-sm">
+      {status === 'reconnecting' && (
+        <div className="fixed top-0 left-0 right-0 bg-yellow-500 text-yellow-950 text-center text-sm py-1.5 font-medium z-50">
+          Reconnecting{reconnectAttempt > 0 ? ` (attempt ${reconnectAttempt})` : ''}...
+        </div>
+      )}
+      {status === 'disconnected' && (
+        <div className="fixed top-0 left-0 right-0 bg-red-500 text-white text-center text-sm py-1.5 font-medium z-50">
           Disconnected from server
         </div>
       )}
