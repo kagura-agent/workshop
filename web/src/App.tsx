@@ -109,6 +109,12 @@ export default function App() {
           return { ...prev, [msg.channelId]: updated };
         });
         break;
+      case 'pin_deleted':
+        setPins((prev) => {
+          const channelPins = prev[msg.channelId] || [];
+          return { ...prev, [msg.channelId]: channelPins.filter((p) => p.id !== msg.pinId) };
+        });
+        break;
       case 'patrol_config':
         setPatrolConfigState(msg.config);
         break;
@@ -211,6 +217,9 @@ export default function App() {
         onOpenSettings={activeChannel ? () => setShowChannelSettings(true) : undefined}
         onToggleTodo={() => setShowTodoPanel((v) => !v)}
         onPatrolTrigger={handlePatrolTrigger}
+        onPinCreate={(channelId, content, label) => send({ type: 'pin_create', channelId, content, label })}
+        onPinMessage={(channelId, messageId) => send({ type: 'pin_message', channelId, messageId })}
+        onPinDelete={(pinId) => send({ type: 'pin_delete', pinId })}
       />
       {showTodoPanel && (
         <TodoPanel

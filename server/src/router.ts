@@ -160,6 +160,15 @@ export class Router {
       case 'pin_list':
         this.handlePinList(ws, msg.channelId);
         break;
+      case 'pin_create':
+        this.handlePinCreate(msg.channelId, msg.content, msg.label);
+        break;
+      case 'pin_message':
+        this.handlePinMessage(msg.channelId, msg.messageId);
+        break;
+      case 'pin_delete':
+        this.handlePinDelete(msg.pinId);
+        break;
       case 'patrol_config_get':
         this.handlePatrolConfigGet(ws);
         break;
@@ -546,6 +555,47 @@ export class Router {
     const rows = db.prepare('SELECT * FROM pins WHERE channel_id = ? ORDER BY updated_at DESC').all(channelId) as any[];
     const pins: Pin[] = rows.map(this.mapPinRow);
     this.sendTo(ws, { type: 'pin_list', channelId, pins });
+  }
+
+  private handlePinCreate(channelId: string, content: string, label?: string): void {
+    const db = getDb();
+    const id = uuid();
+    const now = new Date().toISOString();
+    const sourceId = label || 'custom';
+
+    db.prepare(
+      'INSERT INTO pins (id, channel_id, type, source_id, content, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(id, channelId, 'custom', sourceId, content, now);
+
+    const pin: Pin = { id, channelId, type: 'custom', sourceId, content, updatedAt: now };
+    this.broadcast({ type: 'pin_updated', channelId, pin });
+  }
+
+  private handlePinMessage(channelId: string, messageId: string): void {
+    const db = getDb();
+    const msgRow = db.prepare('SELECT * FROM messages WHERE id = ?').get(messageId) as any;
+    if (!msgRow) return;
+
+    const id = uuid();
+    const now = new Date().toISOString();
+    const content = msgRow.content.length > 200 ? msgRow.content.slice(0, 200) + '...' : msgRow.content;
+
+    db.prepare(
+      'INSERT INTO pins (id, channel_id, type, source_id, content, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(id, channelId, 'message', messageId, content, now);
+
+    const pin: Pin = { id, channelId, type: 'message', sourceId: messageId, content, updatedAt: now };
+    this.broadcast({ type: 'pin_updated', channelId, pin });
+  }
+
+  private handlePinDelete(pinId: string): void {
+    const db = getDb();
+    const row = db.prepare('SELECT * FROM pins WHERE id = ?').get(pinId) as any;
+    if (!row) return;
+
+    const channelId = row.channel_id;
+    db.prepare('DELETE FROM pins WHERE id = ?').run(pinId);
+    this.broadcast({ type: 'pin_deleted', channelId, pinId });
   }
 
   /** Pin sync: when a north star changes, update/create pins in relevant channels. */
