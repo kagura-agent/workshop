@@ -3,7 +3,7 @@ import type WebSocket from 'ws';
 import { getDb } from './db.js';
 import { GatewayConnection } from './gateway.js';
 import { ChannelCronManager } from './cron.js';
-import type { ClientMessage, ServerMessage, Message, Channel, Agent, TodoItem, CronExecution } from './types.js';
+import type { ClientMessage, ServerMessage, Message, Channel, Agent, TodoItem, CronExecution, NorthStar, Pin } from './types.js';
 
 /**
  * Router — bridges frontend WebSocket clients with a single shared OpenClaw Gateway connection.
@@ -22,6 +22,7 @@ export class Router {
     this.handleListChannels(ws);
     this.handleListAgents(ws);
     this.handleTodoList(ws);
+    this.handleNorthStarGet(ws); // send all north stars
 
     // Send message history for all active channels
     this.sendAllChannelHistory(ws);
@@ -143,6 +144,15 @@ export class Router {
         break;
       case 'cron_history':
         this.handleCronHistory(ws, msg.channelId);
+        break;
+      case 'north_star_get':
+        this.handleNorthStarGet(ws, msg.scope);
+        break;
+      case 'north_star_set':
+        this.handleNorthStarSet(msg.scope, msg.content);
+        break;
+      case 'pin_list':
+        this.handlePinList(ws, msg.channelId);
         break;
       default:
         this.sendTo(ws, { type: 'error', message: 'Unknown message type' });
@@ -368,6 +378,7 @@ export class Router {
 
     const item: TodoItem = { id, section, content, status: 'pending', assignedChannel: assignedChannel ?? null, assignedAgent: assignedAgent ?? null, createdAt: now, updatedAt: now };
     this.broadcast({ type: 'todo_created', item });
+    this.syncTodoSectionPins(section);
   }
 
   private handleTodoUpdate(id: string, updates: Partial<Pick<TodoItem, 'content' | 'status' | 'section' | 'assignedChannel' | 'assignedAgent'>>): void {
@@ -401,13 +412,18 @@ export class Router {
 
     const row = db.prepare('SELECT * FROM todo_items WHERE id = ?').get(id) as any;
     this.broadcast({ type: 'todo_updated', item: this.mapTodoRow(row) });
+    this.syncTodoSectionPins(row.section);
   }
 
   private handleTodoDelete(id: string): void {
     const db = getDb();
+    const existing = db.prepare('SELECT section FROM todo_items WHERE id = ?').get(id) as any;
     db.prepare('DELETE FROM todo_history WHERE todo_id = ?').run(id);
     db.prepare('DELETE FROM todo_items WHERE id = ?').run(id);
     this.broadcast({ type: 'todo_deleted', id });
+    if (existing) {
+      this.syncTodoSectionPins(existing.section);
+    }
   }
 
   private mapTodoRow(r: any): TodoItem {
@@ -421,6 +437,151 @@ export class Router {
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     };
+  }
+
+  // --- North Star handlers ---
+
+  private handleNorthStarGet(ws: WebSocket, scope?: string): void {
+    const db = getDb();
+    if (scope) {
+      const row = db.prepare('SELECT * FROM north_stars WHERE scope = ?').get(scope) as any;
+      if (row) {
+        this.sendTo(ws, { type: 'north_star', star: this.mapNorthStarRow(row) });
+      } else {
+        // Return empty star for the requested scope
+        this.sendTo(ws, { type: 'north_star', star: { id: '', scope, content: '', updatedAt: '' } });
+      }
+    } else {
+      const rows = db.prepare('SELECT * FROM north_stars ORDER BY updated_at DESC').all() as any[];
+      const stars: NorthStar[] = rows.map(this.mapNorthStarRow);
+      this.sendTo(ws, { type: 'north_star_list', stars });
+    }
+  }
+
+  private handleNorthStarSet(scope: string, content: string): void {
+    const db = getDb();
+    const existing = db.prepare('SELECT * FROM north_stars WHERE scope = ?').get(scope) as any;
+    const now = new Date().toISOString();
+
+    let star: NorthStar;
+    if (existing) {
+      db.prepare('UPDATE north_stars SET content = ?, updated_at = ? WHERE scope = ?').run(content, now, scope);
+      star = { id: existing.id, scope, content, updatedAt: now };
+    } else {
+      const id = uuid();
+      db.prepare('INSERT INTO north_stars (id, scope, content, updated_at) VALUES (?, ?, ?, ?)').run(id, scope, content, now);
+      star = { id, scope, content, updatedAt: now };
+    }
+
+    this.broadcast({ type: 'north_star', star });
+
+    // Pin sync: update all pins referencing this north star
+    this.syncNorthStarPins(star);
+  }
+
+  private handlePinList(ws: WebSocket, channelId: string): void {
+    const db = getDb();
+    const rows = db.prepare('SELECT * FROM pins WHERE channel_id = ? ORDER BY updated_at DESC').all(channelId) as any[];
+    const pins: Pin[] = rows.map(this.mapPinRow);
+    this.sendTo(ws, { type: 'pin_list', channelId, pins });
+  }
+
+  /** Pin sync: when a north star changes, update/create pins in relevant channels. */
+  private syncNorthStarPins(star: NorthStar): void {
+    const db = getDb();
+    const now = new Date().toISOString();
+
+    // Find existing pins referencing this north star
+    const existingPins = db.prepare(
+      "SELECT * FROM pins WHERE type = 'north_star' AND source_id = ?"
+    ).all(star.id) as any[];
+
+    for (const pinRow of existingPins) {
+      db.prepare('UPDATE pins SET content = ?, updated_at = ? WHERE id = ?').run(star.content, now, pinRow.id);
+      const pin: Pin = { id: pinRow.id, channelId: pinRow.channel_id, type: 'north_star', sourceId: star.id, content: star.content, updatedAt: now };
+      this.broadcast({ type: 'pin_updated', channelId: pin.channelId, pin });
+    }
+
+    // If scope is a channel ID, auto-create a pin in that channel if none exists
+    if (star.scope !== 'global') {
+      const channelRow = db.prepare('SELECT id FROM channels WHERE id = ?').get(star.scope);
+      if (channelRow) {
+        const existing = db.prepare(
+          "SELECT * FROM pins WHERE channel_id = ? AND type = 'north_star' AND source_id = ?"
+        ).get(star.scope, star.id);
+        if (!existing) {
+          const pinId = uuid();
+          db.prepare('INSERT INTO pins (id, channel_id, type, source_id, content, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+            pinId, star.scope, 'north_star', star.id, star.content, now
+          );
+          const pin: Pin = { id: pinId, channelId: star.scope, type: 'north_star', sourceId: star.id, content: star.content, updatedAt: now };
+          this.broadcast({ type: 'pin_updated', channelId: star.scope, pin });
+        }
+      }
+    }
+
+    // Auto-create pin for global north star in all channels that don't have one
+    if (star.scope === 'global') {
+      const channels = db.prepare('SELECT id FROM channels').all() as { id: string }[];
+      for (const ch of channels) {
+        const existing = db.prepare(
+          "SELECT * FROM pins WHERE channel_id = ? AND type = 'north_star' AND source_id = ?"
+        ).get(ch.id, star.id);
+        if (!existing) {
+          const pinId = uuid();
+          db.prepare('INSERT INTO pins (id, channel_id, type, source_id, content, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+            pinId, ch.id, 'north_star', star.id, star.content, now
+          );
+          const pin: Pin = { id: pinId, channelId: ch.id, type: 'north_star', sourceId: star.id, content: star.content, updatedAt: now };
+          this.broadcast({ type: 'pin_updated', channelId: ch.id, pin });
+        }
+      }
+    }
+  }
+
+  /** Pin sync: when a TODO item changes, update pins for its section. */
+  private syncTodoSectionPins(section: string): void {
+    const db = getDb();
+    const now = new Date().toISOString();
+
+    // Render the section content: list all items in this section
+    const items = db.prepare('SELECT * FROM todo_items WHERE section = ? ORDER BY created_at ASC').all(section) as any[];
+    const rendered = items.map((r: any) => `[${r.status}] ${r.content}`).join('\n');
+
+    // Find existing pins for this section
+    const existingPins = db.prepare(
+      "SELECT * FROM pins WHERE type = 'todo_section' AND source_id = ?"
+    ).all(section) as any[];
+
+    for (const pinRow of existingPins) {
+      db.prepare('UPDATE pins SET content = ?, updated_at = ? WHERE id = ?').run(rendered, now, pinRow.id);
+      const pin: Pin = { id: pinRow.id, channelId: pinRow.channel_id, type: 'todo_section', sourceId: section, content: rendered, updatedAt: now };
+      this.broadcast({ type: 'pin_updated', channelId: pin.channelId, pin });
+    }
+
+    // Auto-create pins in channels whose todoSection matches
+    const matchingChannels = db.prepare('SELECT id FROM channels WHERE todo_section = ?').all(section) as { id: string }[];
+    for (const ch of matchingChannels) {
+      const existing = db.prepare(
+        "SELECT * FROM pins WHERE channel_id = ? AND type = 'todo_section' AND source_id = ?"
+      ).get(ch.id, section);
+      if (!existing) {
+        const pinId = uuid();
+        db.prepare('INSERT INTO pins (id, channel_id, type, source_id, content, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+          pinId, ch.id, 'todo_section', section, rendered, now
+        );
+        const pin: Pin = { id: pinId, channelId: ch.id, type: 'todo_section', sourceId: section, content: rendered, updatedAt: now };
+        this.broadcast({ type: 'pin_updated', channelId: ch.id, pin });
+      }
+    }
+  }
+
+  private mapNorthStarRow(r: any): NorthStar {
+    return { id: r.id, scope: r.scope, content: r.content, updatedAt: r.updated_at };
+  }
+
+  private mapPinRow(r: any): Pin {
+    return { id: r.id, channelId: r.channel_id, type: r.type, sourceId: r.source_id, content: r.content, updatedAt: r.updated_at };
   }
 
   // --- Cron handlers ---

@@ -110,6 +110,23 @@ function initSchema(): void {
       status TEXT NOT NULL DEFAULT 'sent',
       FOREIGN KEY (channel_id) REFERENCES channels(id)
     );
+
+    CREATE TABLE IF NOT EXISTS north_stars (
+      id TEXT PRIMARY KEY,
+      scope TEXT NOT NULL DEFAULT 'global',
+      content TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS pins (
+      id TEXT PRIMARY KEY,
+      channel_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      content TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (channel_id) REFERENCES channels(id)
+    );
   `);
 }
 

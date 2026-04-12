@@ -45,6 +45,24 @@ export interface CronExecution {
   status: string;
 }
 
+export interface NorthStar {
+  id: string;
+  scope: 'global' | string;
+  content: string;
+  updatedAt: string;
+}
+
+export type PinType = 'todo_section' | 'north_star' | 'custom';
+
+export interface Pin {
+  id: string;
+  channelId: string;
+  type: PinType;
+  sourceId: string;
+  content: string;
+  updatedAt: string;
+}
+
 export interface Message {
   id: string;
   channelId: string;
@@ -70,6 +88,10 @@ export type ServerMessage =
   | { type: 'todo_deleted'; id: string }
   | { type: 'cron_fired'; channelId: string; execution: CronExecution }
   | { type: 'cron_history'; channelId: string; executions: CronExecution[] }
+  | { type: 'north_star'; star: NorthStar }
+  | { type: 'north_star_list'; stars: NorthStar[] }
+  | { type: 'pin_list'; channelId: string; pins: Pin[] }
+  | { type: 'pin_updated'; channelId: string; pin: Pin }
   | { type: 'error'; message: string };
 
 // Messages from client → server
@@ -85,7 +107,10 @@ export type ClientMessage =
   | { type: 'todo_update'; id: string; updates: Partial<Pick<TodoItem, 'content' | 'status' | 'section' | 'assignedChannel' | 'assignedAgent'>> }
   | { type: 'todo_delete'; id: string }
   | { type: 'cron_trigger'; channelId: string }
-  | { type: 'cron_history'; channelId: string };
+  | { type: 'cron_history'; channelId: string }
+  | { type: 'north_star_get'; scope?: string }
+  | { type: 'north_star_set'; scope: string; content: string }
+  | { type: 'pin_list'; channelId: string };
 
 export interface CreateChannelDialogProps {
   agents: Agent[];

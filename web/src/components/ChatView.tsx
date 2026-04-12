@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { renderMessageContent } from '@/lib/mentions';
-import type { Agent, Channel, Message } from '../types';
+import type { Agent, Channel, Message, Pin } from '../types';
 
 const TYPE_BADGE: Record<string, { label: string; className: string }> = {
   project: { label: 'Project', className: 'bg-discord-accent/20 text-discord-accent' },
@@ -15,17 +15,19 @@ interface ChatViewProps {
   messages: Message[];
   channelAgents: Agent[];
   typingNames: string[];
+  pins: Pin[];
   onSendMessage: (content: string) => void;
   onEditChannel?: () => void;
   onOpenSettings?: () => void;
   onToggleTodo?: () => void;
 }
 
-export function ChatView({ channel, messages, channelAgents, typingNames, onSendMessage, onEditChannel, onOpenSettings, onToggleTodo }: ChatViewProps) {
+export function ChatView({ channel, messages, channelAgents, typingNames, pins, onSendMessage, onEditChannel, onOpenSettings, onToggleTodo }: ChatViewProps) {
   const [input, setInput] = useState('');
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [cursorPos, setCursorPos] = useState(0);
+  const [expandedPinId, setExpandedPinId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -169,6 +171,43 @@ export function ChatView({ channel, messages, channelAgents, typingNames, onSend
           </div>
         </div>
       </div>
+      {/* Pinned items bar */}
+      {pins.length > 0 && (
+        <div className="px-4 py-1.5 border-b border-border bg-card/50">
+          <div className="flex items-center gap-2 overflow-x-auto">
+            <span className="text-[10px] text-muted-foreground shrink-0">Pinned:</span>
+            {pins.map((pin) => {
+              const label = pin.type === 'north_star' ? 'North Star' : pin.sourceId;
+              const isExpanded = expandedPinId === pin.id;
+              return (
+                <button
+                  key={pin.id}
+                  className={cn(
+                    'shrink-0 px-2 py-0.5 rounded text-[11px] cursor-pointer border',
+                    pin.type === 'north_star'
+                      ? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/30'
+                      : 'bg-blue-400/10 text-blue-400 border-blue-400/30',
+                    isExpanded && 'ring-1 ring-offset-1 ring-offset-background ring-foreground/20'
+                  )}
+                  onClick={() => setExpandedPinId(isExpanded ? null : pin.id)}
+                  title={pin.content.slice(0, 100)}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          {expandedPinId && (() => {
+            const pin = pins.find((p) => p.id === expandedPinId);
+            if (!pin) return null;
+            return (
+              <div className="mt-1.5 p-2 rounded bg-muted text-xs text-muted-foreground whitespace-pre-wrap max-h-32 overflow-y-auto">
+                {pin.content || '(empty)'}
+              </div>
+            );
+          })()}
+        </div>
+      )}
       <ScrollArea className="flex-1">
         <div className="p-4" ref={listRef}>
           {messages.length === 0 && (

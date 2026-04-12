@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { AgentList } from './components/AgentList';
@@ -6,7 +6,7 @@ import { CreateChannelDialog } from './components/CreateChannelDialog';
 import { ChannelSettingsPanel } from './components/ChannelSettingsPanel';
 import { TodoPanel } from './components/TodoPanel';
 import { useWebSocket } from './hooks/useWebSocket';
-import type { Channel, Agent, Message, ServerMessage, TodoItem } from './types';
+import type { Channel, Agent, Message, ServerMessage, TodoItem, NorthStar, Pin } from './types';
 
 const WS_URL = `ws://${window.location.hostname}:3100`;
 
@@ -20,6 +20,8 @@ export default function App() {
   const [showChannelSettings, setShowChannelSettings] = useState(false);
   const [showTodoPanel, setShowTodoPanel] = useState(false);
   const [todoItems, setTodoItems] = useState<TodoItem[]>([]);
+  const [northStars, setNorthStars] = useState<NorthStar[]>([]);
+  const [pins, setPins] = useState<Record<string, Pin[]>>({});
 
   const handleMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
@@ -79,6 +81,29 @@ export default function App() {
       case 'todo_deleted':
         setTodoItems((prev) => prev.filter((t) => t.id !== msg.id));
         break;
+      case 'north_star':
+        setNorthStars((prev) => {
+          const idx = prev.findIndex((s) => s.scope === msg.star.scope);
+          if (idx >= 0) return prev.map((s, i) => i === idx ? msg.star : s);
+          return [...prev, msg.star];
+        });
+        break;
+      case 'north_star_list':
+        setNorthStars(msg.stars);
+        break;
+      case 'pin_list':
+        setPins((prev) => ({ ...prev, [msg.channelId]: msg.pins }));
+        break;
+      case 'pin_updated':
+        setPins((prev) => {
+          const channelPins = prev[msg.channelId] || [];
+          const idx = channelPins.findIndex((p) => p.id === msg.pin.id);
+          const updated = idx >= 0
+            ? channelPins.map((p, i) => i === idx ? msg.pin : p)
+            : [...channelPins, msg.pin];
+          return { ...prev, [msg.channelId]: updated };
+        });
+        break;
       case 'error':
         console.error('[workshop]', msg.message);
         break;
@@ -103,6 +128,17 @@ export default function App() {
   const handleUpdateChannelMeta = (channelId: string, metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'northStar' | 'todoSection' | 'cronSchedule' | 'cronEnabled'>>) => {
     send({ type: 'update_channel_meta', channelId, metadata });
   };
+
+  const handleSetNorthStar = (scope: string, content: string) => {
+    send({ type: 'north_star_set', scope, content });
+  };
+
+  // Request pins when active channel changes
+  useEffect(() => {
+    if (activeChannelId && connected) {
+      send({ type: 'pin_list', channelId: activeChannelId });
+    }
+  }, [activeChannelId, connected, send]);
 
   const handleEditChannel = () => {
     if (!activeChannelId) return;
@@ -132,6 +168,7 @@ export default function App() {
         messages={activeChannelId ? (messages[activeChannelId] || []) : []}
         channelAgents={channelAgents}
         typingNames={typingNames}
+        pins={activeChannelId ? (pins[activeChannelId] || []) : []}
         onSendMessage={handleSendMessage}
         onEditChannel={activeChannel ? handleEditChannel : undefined}
         onOpenSettings={activeChannel ? () => setShowChannelSettings(true) : undefined}
@@ -140,10 +177,12 @@ export default function App() {
       {showTodoPanel && (
         <TodoPanel
           items={todoItems}
+          northStars={northStars}
           onClose={() => setShowTodoPanel(false)}
           onCreate={(section, content) => send({ type: 'todo_create', section, content })}
           onUpdate={(id, updates) => send({ type: 'todo_update', id, updates })}
           onDelete={(id) => send({ type: 'todo_delete', id })}
+          onSetNorthStar={handleSetNorthStar}
         />
       )}
       <AgentList agents={agents} />

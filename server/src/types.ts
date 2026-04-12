@@ -65,7 +65,10 @@ export type ClientMessage =
   | { type: 'todo_update'; id: string; updates: Partial<Pick<TodoItem, 'content' | 'status' | 'section' | 'assignedChannel' | 'assignedAgent'>> }
   | { type: 'todo_delete'; id: string }
   | { type: 'cron_trigger'; channelId: string }
-  | { type: 'cron_history'; channelId: string };
+  | { type: 'cron_history'; channelId: string }
+  | { type: 'north_star_get'; scope?: string }
+  | { type: 'north_star_set'; scope: string; content: string }
+  | { type: 'pin_list'; channelId: string };
 
 // WebSocket protocol: server → client
 export type ServerMessage =
@@ -82,7 +85,29 @@ export type ServerMessage =
   | { type: 'todo_deleted'; id: string }
   | { type: 'cron_fired'; channelId: string; execution: CronExecution }
   | { type: 'cron_history'; channelId: string; executions: CronExecution[] }
+  | { type: 'north_star'; star: NorthStar }
+  | { type: 'north_star_list'; stars: NorthStar[] }
+  | { type: 'pin_list'; channelId: string; pins: Pin[] }
+  | { type: 'pin_updated'; channelId: string; pin: Pin }
   | { type: 'error'; message: string };
+
+export interface NorthStar {
+  id: string;
+  scope: 'global' | string;  // 'global' or channel ID
+  content: string;
+  updatedAt: string;
+}
+
+export type PinType = 'todo_section' | 'north_star' | 'custom';
+
+export interface Pin {
+  id: string;
+  channelId: string;
+  type: PinType;
+  sourceId: string;           // todo section name or north star ID
+  content: string;            // rendered snapshot
+  updatedAt: string;
+}
 
 export interface CronExecution {
   id: string;
