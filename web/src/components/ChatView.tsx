@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { renderMessageContent } from '@/lib/mentions';
 import type { Agent, Channel, Message, Pin, Notification } from '../types';
@@ -23,14 +24,20 @@ interface ChatViewProps {
   onOpenSettings?: () => void;
   onToggleTodo?: () => void;
   onPatrolTrigger?: () => void;
+  onPinCreate?: (channelId: string, content: string, label?: string) => void;
+  onPinMessage?: (channelId: string, messageId: string) => void;
+  onPinDelete?: (pinId: string) => void;
 }
 
-export function ChatView({ channel, messages, channelAgents, typingNames, pins, notifications, isPatrolChannel, onSendMessage, onEditChannel, onOpenSettings, onToggleTodo, onPatrolTrigger }: ChatViewProps) {
+export function ChatView({ channel, messages, channelAgents, typingNames, pins, notifications, isPatrolChannel, onSendMessage, onEditChannel, onOpenSettings, onToggleTodo, onPatrolTrigger, onPinCreate, onPinMessage, onPinDelete }: ChatViewProps) {
   const [input, setInput] = useState('');
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [cursorPos, setCursorPos] = useState(0);
   const [expandedPinId, setExpandedPinId] = useState<string | null>(null);
+  const [showPinForm, setShowPinForm] = useState(false);
+  const [pinFormContent, setPinFormContent] = useState('');
+  const [pinFormLabel, setPinFormLabel] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -193,30 +200,93 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
         </div>
       </div>
       {/* Pinned items bar */}
-      {pins.length > 0 && (
+      {(pins.length > 0 || onPinCreate) && channel && (
         <div className="px-4 py-1.5 border-b border-border bg-card/50">
           <div className="flex items-center gap-2 overflow-x-auto">
             <span className="text-[10px] text-muted-foreground shrink-0">Pinned:</span>
             {pins.map((pin) => {
-              const label = pin.type === 'north_star' ? 'North Star' : pin.sourceId;
+              const label = pin.type === 'north_star' ? 'North Star'
+                : pin.type === 'message' ? '\ud83d\udccc Message'
+                : pin.type === 'custom' ? (pin.sourceId !== 'custom' ? `\ud83d\udcdd ${pin.sourceId}` : '\ud83d\udcdd Custom')
+                : pin.sourceId;
               const isExpanded = expandedPinId === pin.id;
+              const colorClass = pin.type === 'north_star'
+                ? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/30'
+                : pin.type === 'message'
+                ? 'bg-purple-400/10 text-purple-400 border-purple-400/30'
+                : pin.type === 'custom'
+                ? 'bg-green-400/10 text-green-400 border-green-400/30'
+                : 'bg-blue-400/10 text-blue-400 border-blue-400/30';
               return (
-                <button
+                <span
                   key={pin.id}
                   className={cn(
-                    'shrink-0 px-2 py-0.5 rounded text-[11px] cursor-pointer border',
-                    pin.type === 'north_star'
-                      ? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/30'
-                      : 'bg-blue-400/10 text-blue-400 border-blue-400/30',
+                    'group shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] border',
+                    colorClass,
                     isExpanded && 'ring-1 ring-offset-1 ring-offset-background ring-foreground/20'
                   )}
-                  onClick={() => setExpandedPinId(isExpanded ? null : pin.id)}
-                  title={pin.content.slice(0, 100)}
                 >
-                  {label}
-                </button>
+                  <button
+                    className="cursor-pointer"
+                    onClick={() => setExpandedPinId(isExpanded ? null : pin.id)}
+                    title={pin.content.slice(0, 100)}
+                  >
+                    {label}
+                  </button>
+                  {onPinDelete && (
+                    <button
+                      className="cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity text-current hover:text-foreground ml-0.5 text-[10px] leading-none"
+                      onClick={(e) => { e.stopPropagation(); onPinDelete(pin.id); }}
+                      title="Unpin"
+                    >
+                      &#10005;
+                    </button>
+                  )}
+                </span>
               );
             })}
+            {onPinCreate && !showPinForm && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="shrink-0 h-5 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                onClick={() => setShowPinForm(true)}
+              >
+                + Pin
+              </Button>
+            )}
+            {showPinForm && (
+              <form
+                className="shrink-0 inline-flex items-center gap-1"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (pinFormContent.trim() && channel) {
+                    onPinCreate!(channel.id, pinFormContent.trim(), pinFormLabel.trim() || undefined);
+                    setPinFormContent('');
+                    setPinFormLabel('');
+                    setShowPinForm(false);
+                  }
+                }}
+              >
+                <input
+                  type="text"
+                  value={pinFormLabel}
+                  onChange={(e) => setPinFormLabel(e.target.value)}
+                  placeholder="Label"
+                  className="w-16 px-1.5 py-0.5 rounded bg-muted text-[11px] outline-none border border-border"
+                  autoFocus
+                />
+                <input
+                  type="text"
+                  value={pinFormContent}
+                  onChange={(e) => setPinFormContent(e.target.value)}
+                  placeholder="Content"
+                  className="w-32 px-1.5 py-0.5 rounded bg-muted text-[11px] outline-none border border-border"
+                />
+                <Button type="submit" variant="ghost" size="sm" className="h-5 px-1.5 text-[11px]">Add</Button>
+                <Button type="button" variant="ghost" size="sm" className="h-5 px-1.5 text-[11px] text-muted-foreground" onClick={() => setShowPinForm(false)}>&#10005;</Button>
+              </form>
+            )}
           </div>
           {expandedPinId && (() => {
             const pin = pins.find((p) => p.id === expandedPinId);
@@ -240,7 +310,7 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
             <div
               key={msg.id}
               className={cn(
-                'flex gap-3 py-1 mb-2',
+                'group flex gap-3 py-1 mb-2 relative',
                 msg.isUrgent && 'border-l-2 border-red-500 pl-2'
               )}
             >
@@ -252,7 +322,7 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
               >
                 {msg.senderName.charAt(0).toUpperCase()}
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2 mb-0.5">
                   <span className="font-semibold text-sm">{msg.senderName}</span>
                   <span className="text-[11px] text-muted-foreground">{formatTime(msg.timestamp)}</span>
@@ -264,6 +334,15 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
                   {renderMessageContent(msg.content, channelAgents)}
                 </div>
               </div>
+              {onPinMessage && channel && (
+                <button
+                  className="cursor-pointer absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground/50 hover:text-foreground text-sm"
+                  onClick={() => onPinMessage(channel.id, msg.id)}
+                  title="Pin this message"
+                >
+                  &#128204;
+                </button>
+              )}
             </div>
           ))}
           {notifications.filter(n => !n.read).map((notif) => (
