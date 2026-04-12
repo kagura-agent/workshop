@@ -16,6 +16,31 @@ export function getDb(): Database.Database {
   return db;
 }
 
+/**
+ * Initialize a database at the given path (or ':memory:' for in-memory).
+ * Replaces the singleton so that getDb() returns this instance.
+ * Used by tests to avoid touching the production database file.
+ */
+export function initDb(dbPath: string): Database.Database {
+  if (db) {
+    db.close();
+  }
+  db = new Database(dbPath);
+  if (dbPath !== ':memory:') {
+    db.pragma('journal_mode = WAL');
+  }
+  initSchema();
+  return db;
+}
+
+/** Reset the singleton (close if open). Used by tests for cleanup. */
+export function resetDb(): void {
+  if (db) {
+    db.close();
+    (db as any) = undefined!;
+  }
+}
+
 /** Check if a column exists in a table using pragma table_info. */
 function hasColumn(d: Database.Database, table: string, column: string): boolean {
   const cols = d.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
