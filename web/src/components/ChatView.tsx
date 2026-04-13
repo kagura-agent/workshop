@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { renderMessageContent } from '@/lib/mentions';
+import { MessageContent } from '@/components/MessageContent';
 import type { Agent, Channel, Message, Pin, Notification } from '../types';
 
 const TYPE_BADGE: Record<string, { label: string; className: string }> = {
@@ -306,7 +306,10 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
               No messages yet. Say something!
             </div>
           )}
-          {messages.map((msg) => (
+          {messages.map((msg) => {
+            const senderAgent = channelAgents.find(a => a.id === msg.senderId);
+            const avatarUrl = senderAgent?.avatar?.startsWith('http') ? senderAgent.avatar : null;
+            return (
             <div
               key={msg.id}
               className={cn(
@@ -314,14 +317,22 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
                 msg.isUrgent && 'border-l-2 border-red-500 pl-2'
               )}
             >
-              <div
-                className={cn(
-                  'w-10 h-10 rounded-full flex items-center justify-center text-base font-semibold shrink-0 text-white',
-                  msg.role === 'user' ? 'bg-discord-online' : 'bg-discord-accent'
-                )}
-              >
-                {msg.senderName.charAt(0).toUpperCase()}
-              </div>
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={msg.senderName}
+                  className="w-10 h-10 rounded-full object-cover shrink-0"
+                />
+              ) : (
+                <div
+                  className={cn(
+                    'w-10 h-10 rounded-full flex items-center justify-center text-base font-semibold shrink-0 text-white',
+                    msg.role === 'user' ? 'bg-discord-online' : 'bg-discord-accent'
+                  )}
+                >
+                  {msg.senderName.charAt(0).toUpperCase()}
+                </div>
+              )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2 mb-0.5">
                   <span className="font-semibold text-sm">{msg.senderName}</span>
@@ -330,9 +341,7 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
                     <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400 uppercase">Urgent</span>
                   )}
                 </div>
-                <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">
-                  {renderMessageContent(msg.content, channelAgents)}
-                </div>
+                <MessageContent content={msg.content} agents={channelAgents} />
               </div>
               {onPinMessage && channel && (
                 <button
@@ -344,7 +353,8 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
                 </button>
               )}
             </div>
-          ))}
+            );
+          })}
           {notifications.filter(n => !n.read).map((notif) => (
             <div key={notif.id} className="flex gap-3 py-1 mb-2 border-l-2 border-blue-400 pl-2 bg-blue-400/5 rounded-r">
               <div className="w-10 h-10 rounded-full flex items-center justify-center text-base font-semibold shrink-0 bg-blue-500 text-white">
