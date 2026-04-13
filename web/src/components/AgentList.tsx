@@ -109,7 +109,15 @@ export function AgentList({ agents, onRegisterAgent, onUpdateAgent, onRemoveAgen
 
     return (
       <div key={agent.id} className="group flex items-center gap-2 py-1 mb-1">
-        <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-discord-online' : 'bg-discord-offline'}`} />
+        {agent.avatar?.startsWith('http') ? (
+          <img
+            src={agent.avatar}
+            alt={agent.name}
+            className="w-6 h-6 rounded-full object-cover shrink-0"
+          />
+        ) : (
+          <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-discord-online' : 'bg-discord-offline'}`} />
+        )}
         <span className="text-sm text-muted-foreground flex-1">{agent.name}</span>
         <div className="hidden group-hover:flex gap-0.5">
           <button
