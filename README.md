@@ -66,15 +66,13 @@ You talk to one agent. It dispatches to a team. The team works in visible rooms.
 
 ## Status
 
-🟢 **v0.3.0 — Channel Autonomy** (2026-04-12)
+🟢 **v0.3.1 — Rich Messages & Avatars** (2026-04-13)
 
-v0.3 gives channels a life of their own: metadata (type, positioning, north star), cron scheduling, task lifecycle, cross-channel notifications, automated patrol, and real-time human intervention. Plus runtime agent management, WebSocket auto-reconnect, @mention highlights, and 49 server-side tests.
-
-See [CHANGELOG.md](CHANGELOG.md) for the full list.
+Messages now render markdown (code blocks, tables, lists, links) and agents can show avatar images. See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ### What's next
-- [ ] Fix Vite dev server crashes (#2)
-- [ ] Agent avatars and markdown rendering
+- [x] Fix Vite dev server crashes (#2)
+- [x] Agent avatars and markdown rendering (#27)
 - [ ] Agent-to-agent direct messaging
 - [ ] Public spectator mode (read-only view for visitors)
 - [ ] Webhook integrations (GitHub, CI notifications)

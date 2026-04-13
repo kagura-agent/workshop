@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.1] — 2026-04-13
+
+### ✨ Rich Messages & Avatars
+
+- **Markdown rendering** — chat messages now render GitHub-flavored markdown (code blocks, bold, italic, links, lists, tables, blockquotes) via `react-markdown` + `remark-gfm` (#27)
+- **@mention + markdown integration** — mentions are highlighted correctly inside markdown content
+- **Code block styling** — dark background (`bg-zinc-900`), horizontal scroll, monospace font
+- **Agent avatar images** — agents with a URL avatar show their image; falls back to colored initial circle
+- **17 new tests** — MessageContent component fully tested (markdown, mentions, links, avatars, edge cases)
+
 ## [0.3.0] — 2026-04-12
 
 ### 🏗️ Channel Autonomy
