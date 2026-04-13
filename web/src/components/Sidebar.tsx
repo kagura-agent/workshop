@@ -18,6 +18,10 @@ interface SidebarProps {
 
 export function Sidebar({ channels, agents, activeChannelId, notificationBadges, patrolControlChannelId, onSelectChannel, onCreateChannel, onOpenSettings, onOpenCronDashboard }: SidebarProps) {
   const [showDialog, setShowDialog] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+
+  const activeChannels = channels.filter((c) => c.status !== 'archived');
+  const archivedChannels = channels.filter((c) => c.status === 'archived');
 
   return (
     <div className="w-60 bg-card border-r border-border flex flex-col">
@@ -42,12 +46,12 @@ export function Sidebar({ channels, agents, activeChannelId, notificationBadges,
               +
             </button>
           </div>
-          {channels.length === 0 && (
+          {activeChannels.length === 0 && archivedChannels.length === 0 && (
             <div className="px-3 py-2 text-muted-foreground text-[13px]">
               No channels yet
             </div>
           )}
-          {channels.map((channel) => (
+          {activeChannels.map((channel) => (
             <div
               key={channel.id}
               className={cn(
@@ -77,6 +81,38 @@ export function Sidebar({ channels, agents, activeChannelId, notificationBadges,
               </button>
             </div>
           ))}
+
+          {/* Archived channels section */}
+          {archivedChannels.length > 0 && (
+            <div className="mt-2">
+              <button
+                className="flex items-center gap-1 px-3 py-1.5 w-full text-left uppercase tracking-wide text-xs font-semibold text-muted-foreground/60 hover:text-muted-foreground cursor-pointer"
+                onClick={() => setShowArchived((v) => !v)}
+              >
+                <span className="text-[10px]">{showArchived ? '\u25BC' : '\u25B6'}</span>
+                Archived ({archivedChannels.length})
+              </button>
+              {showArchived && archivedChannels.map((channel) => (
+                <div
+                  key={channel.id}
+                  className={cn(
+                    "group px-3 py-2 rounded cursor-pointer text-muted-foreground/50 hover:bg-accent hover:text-muted-foreground text-sm flex items-center gap-1.5 before:content-['#'] before:text-muted-foreground/30 before:font-semibold",
+                    channel.id === activeChannelId && 'bg-accent text-muted-foreground'
+                  )}
+                  onClick={() => onSelectChannel(channel.id)}
+                >
+                  <span className="flex-1 truncate">{channel.name}</span>
+                  <button
+                    className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground/50 hover:text-foreground cursor-pointer text-xs"
+                    onClick={(e) => { e.stopPropagation(); onOpenSettings(channel.id); }}
+                    title="Channel settings"
+                  >
+                    &#9881;
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </ScrollArea>
       {showDialog && (

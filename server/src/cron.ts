@@ -172,6 +172,16 @@ export class ChannelCronManager {
     }));
   }
 
+  /** Stop and remove the cron task for a specific channel. */
+  stopChannel(channelId: string): void {
+    const existing = this.tasks.get(channelId);
+    if (existing) {
+      existing.stop();
+      this.tasks.delete(channelId);
+      console.log(`[cron] stopped channel=${channelId}`);
+    }
+  }
+
   /** Stop all cron tasks (for graceful shutdown). */
   stopAll(): void {
     for (const [channelId, task] of this.tasks) {

@@ -620,4 +620,128 @@ describe('router.ts - Core business logic', () => {
       expect(badges[0].unreadCount).toBe(0);
     });
   });
+
+  // ------- Channel lifecycle (delete/archive/rename) -------
+  describe('Channel lifecycle (delete/archive/rename)', () => {
+    it('delete_channel cascades correctly and broadcasts channel_deleted', () => {
+      (ctx.router as any).clients.add(ctx.mockWs);
+      const db = getDb();
+
+      // Seed related data for test-channel
+      db.prepare("INSERT INTO messages (id, channel_id, sender_id, sender_name, role, content, timestamp, is_urgent) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 0)").run('msg-1', 'test-channel', 'user', 'You', 'user', 'hello');
+      db.prepare("INSERT INTO pins (id, channel_id, type, source_id, content, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))").run('pin-1', 'test-channel', 'custom', 'src', 'pinned');
+      db.prepare("INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)").run('notif-1', 'test-channel', 'other-channel', 'notif', 'todo_change');
+      db.prepare("INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)").run('notif-2', 'other-channel', 'test-channel', 'notif2', 'todo_change');
+      db.prepare("INSERT INTO cron_executions (id, channel_id, fired_at, agent_ids, prompt_snippet, status) VALUES (?, ?, datetime('now'), ?, ?, ?)").run('exec-1', 'test-channel', '["agent-1"]', 'snippet', 'sent');
+      db.prepare("INSERT INTO north_stars (id, scope, content, updated_at) VALUES (?, ?, ?, datetime('now'))").run('ns-1', 'test-channel', 'goal');
+      db.prepare("INSERT INTO todo_items (id, section, content, status, assigned_channel, assigned_agent, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))").run('todo-1', 'backlog', 'task', 'pending', 'test-channel', null);
+
+      ctx.clearSent();
+      (ctx.router as any).handleDeleteChannel('test-channel');
+
+      // Verify channel row is gone
+      expect(db.prepare('SELECT * FROM channels WHERE id = ?').get('test-channel')).toBeUndefined();
+
+      // Verify cascaded deletes
+      expect(db.prepare('SELECT * FROM channel_agents WHERE channel_id = ?').all('test-channel')).toHaveLength(0);
+      expect(db.prepare('SELECT * FROM messages WHERE channel_id = ?').all('test-channel')).toHaveLength(0);
+      expect(db.prepare('SELECT * FROM pins WHERE channel_id = ?').all('test-channel')).toHaveLength(0);
+      expect(db.prepare("SELECT * FROM notifications WHERE source_channel_id = 'test-channel' OR target_channel_id = 'test-channel'").all()).toHaveLength(0);
+      expect(db.prepare('SELECT * FROM cron_executions WHERE channel_id = ?').all('test-channel')).toHaveLength(0);
+      expect(db.prepare("SELECT * FROM north_stars WHERE scope = 'test-channel'").all()).toHaveLength(0);
+
+      // Todo assignment cleared but todo still exists
+      const todo = db.prepare('SELECT * FROM todo_items WHERE id = ?').get('todo-1') as any;
+      expect(todo).toBeTruthy();
+      expect(todo.assigned_channel).toBeNull();
+
+      // Broadcast
+      const deleted = ctx.sentOfType('channel_deleted');
+      expect(deleted).toHaveLength(1);
+      expect(deleted[0].channelId).toBe('test-channel');
+    });
+
+    it('delete_channel stops cron', () => {
+      (ctx.router as any).clients.add(ctx.mockWs);
+
+      const mockCronManager = { stopChannel: vi.fn() };
+      (ctx.router as any).cronManager = mockCronManager;
+
+      (ctx.router as any).handleDeleteChannel('test-channel');
+
+      expect(mockCronManager.stopChannel).toHaveBeenCalledWith('test-channel');
+    });
+
+    it('archive_channel toggles status and broadcasts channel_updated', () => {
+      (ctx.router as any).clients.add(ctx.mockWs);
+      const db = getDb();
+
+      // Initially active
+      const before = db.prepare('SELECT status FROM channels WHERE id = ?').get('test-channel') as any;
+      expect(before.status).toBe('active');
+
+      ctx.clearSent();
+      (ctx.router as any).handleArchiveChannel('test-channel');
+
+      const after = db.prepare('SELECT status FROM channels WHERE id = ?').get('test-channel') as any;
+      expect(after.status).toBe('archived');
+
+      const updated = ctx.sentOfType('channel_updated');
+      expect(updated).toHaveLength(1);
+      expect(updated[0].channel.status).toBe('archived');
+
+      // Toggle back
+      ctx.clearSent();
+      (ctx.router as any).handleArchiveChannel('test-channel');
+
+      const restored = db.prepare('SELECT status FROM channels WHERE id = ?').get('test-channel') as any;
+      expect(restored.status).toBe('active');
+    });
+
+    it('archive_channel stops cron when archiving', () => {
+      (ctx.router as any).clients.add(ctx.mockWs);
+
+      const mockCronManager = { stopChannel: vi.fn(), syncChannel: vi.fn() };
+      (ctx.router as any).cronManager = mockCronManager;
+
+      (ctx.router as any).handleArchiveChannel('test-channel');
+
+      expect(mockCronManager.stopChannel).toHaveBeenCalledWith('test-channel');
+    });
+
+    it('rename_channel updates name and broadcasts', () => {
+      (ctx.router as any).clients.add(ctx.mockWs);
+      const db = getDb();
+
+      ctx.clearSent();
+      (ctx.router as any).handleRenameChannel('test-channel', 'Renamed Channel');
+
+      const row = db.prepare('SELECT name FROM channels WHERE id = ?').get('test-channel') as any;
+      expect(row.name).toBe('Renamed Channel');
+
+      const updated = ctx.sentOfType('channel_updated');
+      expect(updated).toHaveLength(1);
+      expect(updated[0].channel.name).toBe('Renamed Channel');
+    });
+
+    it('archived channel: handleSendMessage does not forward to gateway', () => {
+      (ctx.router as any).clients.add(ctx.mockWs);
+      const db = getDb();
+      const gateway = { sendChat: vi.fn() };
+      (ctx.router as any).gateway = gateway;
+
+      // Archive the channel
+      db.prepare("UPDATE channels SET status = 'archived' WHERE id = ?").run('test-channel');
+
+      (ctx.router as any).handleSendMessage('test-channel', 'hello archived');
+
+      // Message should be stored
+      const msgs = db.prepare('SELECT * FROM messages WHERE channel_id = ?').all('test-channel') as any[];
+      expect(msgs).toHaveLength(1);
+      expect(msgs[0].content).toBe('hello archived');
+
+      // But gateway should NOT be called
+      expect(gateway.sendChat).not.toHaveBeenCalled();
+    });
+  });
 });

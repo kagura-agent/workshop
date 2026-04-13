@@ -190,6 +190,15 @@ export class Router {
       case 'remove_agent':
         this.handleRemoveAgent(ws, msg.id);
         break;
+      case 'delete_channel':
+        this.handleDeleteChannel(msg.channelId);
+        break;
+      case 'archive_channel':
+        this.handleArchiveChannel(msg.channelId);
+        break;
+      case 'rename_channel':
+        this.handleRenameChannel(msg.channelId, msg.name);
+        break;
       default:
         this.sendTo(ws, { type: 'error', message: 'Unknown message type' });
     }
@@ -209,6 +218,13 @@ export class Router {
     const msg = this.storeMessage(channelId, 'user', 'You', 'user', content, isUrgent);
     console.log(`[msg] user → channel=${channelId}: "${content.slice(0, 80)}"`);
     this.broadcast({ type: 'message', channelId, message: msg });
+
+    // Skip forwarding to gateway if channel is archived (still stored for history)
+    const channelRow = getDb().prepare('SELECT status FROM channels WHERE id = ?').get(channelId) as any;
+    if (channelRow?.status === 'archived') {
+      console.log(`[msg] channel=${channelId} is archived, skipping gateway forward`);
+      return;
+    }
 
     if (!this.gateway) {
       console.warn(`[msg] no gateway connection`);
@@ -264,6 +280,111 @@ export class Router {
 
       this.gateway.sendChat(sendContent, channelId, agent_id);
     }
+  }
+
+  private handleDeleteChannel(channelId: string): void {
+    const db = getDb();
+
+    const row = db.prepare('SELECT * FROM channels WHERE id = ?').get(channelId) as any;
+    if (!row) return;
+
+    // Cascade delete related data
+    db.prepare('DELETE FROM channel_agents WHERE channel_id = ?').run(channelId);
+    db.prepare('DELETE FROM messages WHERE channel_id = ?').run(channelId);
+    db.prepare('DELETE FROM pins WHERE channel_id = ?').run(channelId);
+    db.prepare('DELETE FROM notifications WHERE source_channel_id = ? OR target_channel_id = ?').run(channelId, channelId);
+    db.prepare('DELETE FROM cron_executions WHERE channel_id = ?').run(channelId);
+    db.prepare('DELETE FROM north_stars WHERE scope = ?').run(channelId);
+
+    // Clear todo assignments (set to null, don't delete todos)
+    db.prepare('UPDATE todo_items SET assigned_channel = NULL WHERE assigned_channel = ?').run(channelId);
+
+    // Stop cron
+    if (this.cronManager) {
+      this.cronManager.stopChannel(channelId);
+    }
+
+    // Delete channel row
+    db.prepare('DELETE FROM channels WHERE id = ?').run(channelId);
+
+    this.broadcast({ type: 'channel_deleted', channelId });
+  }
+
+  private handleArchiveChannel(channelId: string): void {
+    const db = getDb();
+
+    const row = db.prepare('SELECT * FROM channels WHERE id = ?').get(channelId) as any;
+    if (!row) return;
+
+    const newStatus = row.status === 'archived' ? 'active' : 'archived';
+    db.prepare('UPDATE channels SET status = ? WHERE id = ?').run(newStatus, channelId);
+
+    if (newStatus === 'archived' && this.cronManager) {
+      this.cronManager.stopChannel(channelId);
+    }
+
+    if (newStatus === 'active' && this.cronManager) {
+      // Re-sync cron if channel has cron settings
+      const updated = db.prepare('SELECT * FROM channels WHERE id = ?').get(channelId) as any;
+      if (updated.cron_enabled && updated.cron_schedule) {
+        const agents = db.prepare(
+          'SELECT agent_id, require_mention FROM channel_agents WHERE channel_id = ?'
+        ).all(channelId) as { agent_id: string; require_mention: number }[];
+        const channel: Channel = {
+          id: updated.id, name: updated.name,
+          agents: agents.map(a => a.agent_id),
+          agentConfigs: agents.map(a => ({ id: a.agent_id, requireMention: !!a.require_mention })),
+          createdAt: updated.created_at, status: updated.status,
+          type: updated.type ?? 'project', positioning: updated.positioning ?? '',
+          guidelines: updated.guidelines ?? '', northStar: updated.north_star ?? '',
+          todoSection: updated.todo_section ?? null, cronSchedule: updated.cron_schedule ?? null,
+          cronEnabled: !!updated.cron_enabled,
+        };
+        this.cronManager.syncChannel(channel);
+      }
+    }
+
+    // Broadcast channel_updated with the full channel
+    const updated = db.prepare('SELECT * FROM channels WHERE id = ?').get(channelId) as any;
+    const agents = db.prepare(
+      'SELECT agent_id, require_mention FROM channel_agents WHERE channel_id = ?'
+    ).all(channelId) as { agent_id: string; require_mention: number }[];
+    const channel: Channel = {
+      id: updated.id, name: updated.name,
+      agents: agents.map(a => a.agent_id),
+      agentConfigs: agents.map(a => ({ id: a.agent_id, requireMention: !!a.require_mention })),
+      createdAt: updated.created_at, status: updated.status,
+      type: updated.type ?? 'project', positioning: updated.positioning ?? '',
+      guidelines: updated.guidelines ?? '', northStar: updated.north_star ?? '',
+      todoSection: updated.todo_section ?? null, cronSchedule: updated.cron_schedule ?? null,
+      cronEnabled: !!updated.cron_enabled,
+    };
+    this.broadcast({ type: 'channel_updated', channel });
+  }
+
+  private handleRenameChannel(channelId: string, name: string): void {
+    const db = getDb();
+
+    const row = db.prepare('SELECT * FROM channels WHERE id = ?').get(channelId) as any;
+    if (!row) return;
+
+    db.prepare('UPDATE channels SET name = ? WHERE id = ?').run(name, channelId);
+
+    // Broadcast channel_updated
+    const agents = db.prepare(
+      'SELECT agent_id, require_mention FROM channel_agents WHERE channel_id = ?'
+    ).all(channelId) as { agent_id: string; require_mention: number }[];
+    const channel: Channel = {
+      id: row.id, name,
+      agents: agents.map(a => a.agent_id),
+      agentConfigs: agents.map(a => ({ id: a.agent_id, requireMention: !!a.require_mention })),
+      createdAt: row.created_at, status: row.status,
+      type: row.type ?? 'project', positioning: row.positioning ?? '',
+      guidelines: row.guidelines ?? '', northStar: row.north_star ?? '',
+      todoSection: row.todo_section ?? null, cronSchedule: row.cron_schedule ?? null,
+      cronEnabled: !!row.cron_enabled,
+    };
+    this.broadcast({ type: 'channel_updated', channel });
   }
 
   private handleListChannels(ws: WebSocket): void {
