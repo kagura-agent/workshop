@@ -30,6 +30,7 @@ export class Router {
     this.sendAllNotificationBadges(ws);
     this.handlePatrolConfigGet(ws);
     this.sendDmUnread(ws);
+    this.sendAllChannelTodos(ws);
 
     ws.on('message', (raw) => {
       try {
@@ -211,6 +212,12 @@ export class Router {
         break;
       case 'dm_conversations':
         this.handleDmConversations(ws);
+        break;
+      case 'channel_todo_list':
+        this.handleChannelTodoList(ws, msg.channelId);
+        break;
+      case 'channel_todo_create':
+        this.handleChannelTodoCreate(msg.channelId, msg.content, msg.status);
         break;
       default:
         this.sendTo(ws, { type: 'error', message: 'Unknown message type' });
@@ -640,6 +647,39 @@ export class Router {
     }
   }
 
+  private handleChannelTodoList(ws: WebSocket, channelId: string): void {
+    const db = getDb();
+    const rows = db.prepare('SELECT * FROM todo_items WHERE assigned_channel = ? ORDER BY created_at ASC').all(channelId) as any[];
+    const items: TodoItem[] = rows.map(this.mapTodoRow);
+    this.sendTo(ws, { type: 'channel_todo_list', channelId, items });
+  }
+
+  private handleChannelTodoCreate(channelId: string, content: string, status?: string): void {
+    const db = getDb();
+    const id = uuid();
+    const now = new Date().toISOString();
+
+    // Default section to channel name
+    const channelRow = db.prepare('SELECT name FROM channels WHERE id = ?').get(channelId) as any;
+    const section = channelRow?.name ?? channelId;
+    const todoStatus = status ?? 'pending';
+
+    db.prepare(
+      'INSERT INTO todo_items (id, section, content, status, assigned_channel, assigned_agent, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(id, section, content, todoStatus, channelId, null, now, now);
+
+    const item: TodoItem = { id, section, content, status: todoStatus as any, assignedChannel: channelId, assignedAgent: null, createdAt: now, updatedAt: now };
+    this.broadcast({ type: 'todo_created', item });
+    this.broadcast({ type: 'channel_todo_list', channelId, items: this.getChannelTodoItems(channelId) });
+    this.syncTodoSectionPins(section);
+  }
+
+  private getChannelTodoItems(channelId: string): TodoItem[] {
+    const db = getDb();
+    const rows = db.prepare('SELECT * FROM todo_items WHERE assigned_channel = ? ORDER BY created_at ASC').all(channelId) as any[];
+    return rows.map(this.mapTodoRow);
+  }
+
   private mapTodoRow(r: any): TodoItem {
     return {
       id: r.id,
@@ -864,6 +904,19 @@ export class Router {
 
     const executions = this.cronManager.getHistory(channelId);
     this.sendTo(ws, { type: 'cron_history', channelId, executions });
+  }
+
+  private sendAllChannelTodos(ws: WebSocket): void {
+    const db = getDb();
+    const channels = db.prepare('SELECT id FROM channels').all() as { id: string }[];
+
+    for (const { id: channelId } of channels) {
+      const rows = db.prepare('SELECT * FROM todo_items WHERE assigned_channel = ? ORDER BY created_at ASC').all(channelId) as any[];
+      if (rows.length > 0) {
+        const items: TodoItem[] = rows.map(this.mapTodoRow);
+        this.sendTo(ws, { type: 'channel_todo_list', channelId, items });
+      }
+    }
   }
 
   private sendAllChannelHistory(ws: WebSocket): void {

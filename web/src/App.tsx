@@ -34,6 +34,7 @@ export default function App() {
   const [dmMessages, setDmMessages] = useState<Record<string, DirectMessage[]>>({});
   const [dmConversations, setDmConversations] = useState<DmConversation[]>([]);
   const [dmUnread, setDmUnread] = useState<Record<string, number>>({});
+  const [channelTodos, setChannelTodos] = useState<Record<string, TodoItem[]>>({});
 
   const handleMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
@@ -161,6 +162,9 @@ export default function App() {
         break;
       case 'dm_unread':
         setDmUnread(msg.counts);
+        break;
+      case 'channel_todo_list':
+        setChannelTodos((prev) => ({ ...prev, [msg.channelId]: msg.items }));
         break;
       case 'error':
         console.error('[workshop]', msg.message);
@@ -332,6 +336,11 @@ export default function App() {
           onPinCreate={(channelId, content, label) => send({ type: 'pin_create', channelId, content, label })}
           onPinMessage={(channelId, messageId) => send({ type: 'pin_message', channelId, messageId })}
           onPinDelete={(pinId) => send({ type: 'pin_delete', pinId })}
+          channelTodoItems={activeChannelId ? (channelTodos[activeChannelId] || []) : []}
+          onChannelTodoCreate={(channelId, content, status) => send({ type: 'channel_todo_create', channelId, content, status })}
+          onChannelTodoUpdate={(id, updates) => send({ type: 'todo_update', id, updates })}
+          onChannelTodoDelete={(id) => send({ type: 'todo_delete', id })}
+          onChannelTodoRefresh={(channelId) => send({ type: 'channel_todo_list', channelId })}
         />
       )}
       {showTodoPanel && (

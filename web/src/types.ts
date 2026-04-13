@@ -123,6 +123,7 @@ export type ServerMessage =
   | { type: 'dm_list'; withId: string; messages: DirectMessage[] }
   | { type: 'dm_conversations'; conversations: DmConversation[] }
   | { type: 'dm_unread'; counts: Record<string, number> }
+  | { type: 'channel_todo_list'; channelId: string; items: TodoItem[] }
   | { type: 'error'; message: string };
 
 // Messages from client → server
@@ -158,7 +159,9 @@ export type ClientMessage =
   | { type: 'send_dm'; toId: string; content: string }
   | { type: 'list_dms'; withId: string; limit?: number; before?: string }
   | { type: 'dm_mark_read'; withId: string }
-  | { type: 'dm_conversations' };
+  | { type: 'dm_conversations' }
+  | { type: 'channel_todo_list'; channelId: string }
+  | { type: 'channel_todo_create'; channelId: string; content: string; status?: TodoStatus };
 
 export interface CreateChannelDialogProps {
   agents: Agent[];
