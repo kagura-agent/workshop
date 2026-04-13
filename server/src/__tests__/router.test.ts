@@ -744,4 +744,71 @@ describe('router.ts - Core business logic', () => {
       expect(gateway.sendChat).not.toHaveBeenCalled();
     });
   });
+
+  // ------- Channel TODO (per-channel) -------
+  describe('Channel TODO (per-channel)', () => {
+    it('channel_todo_list returns only items for that channel', () => {
+      (ctx.router as any).clients.add(ctx.mockWs);
+
+      // Create items: one assigned to test-channel, one to other-channel, one global
+      (ctx.router as any).handleTodoCreate('backlog', 'task for test', 'test-channel');
+      (ctx.router as any).handleTodoCreate('backlog', 'task for other', 'other-channel');
+      (ctx.router as any).handleTodoCreate('backlog', 'global task');
+
+      ctx.clearSent();
+      (ctx.router as any).handleChannelTodoList(ctx.mockWs, 'test-channel');
+
+      const lists = ctx.sentOfType('channel_todo_list');
+      expect(lists).toHaveLength(1);
+      expect(lists[0].channelId).toBe('test-channel');
+      expect(lists[0].items).toHaveLength(1);
+      expect(lists[0].items[0].content).toBe('task for test');
+    });
+
+    it('channel_todo_create creates item with correct assigned_channel and section', () => {
+      (ctx.router as any).clients.add(ctx.mockWs);
+
+      (ctx.router as any).handleChannelTodoCreate('test-channel', 'channel task');
+
+      const db = getDb();
+      const items = db.prepare('SELECT * FROM todo_items WHERE assigned_channel = ?').all('test-channel') as any[];
+      expect(items).toHaveLength(1);
+      expect(items[0].content).toBe('channel task');
+      expect(items[0].assigned_channel).toBe('test-channel');
+      expect(items[0].section).toBe('Test Channel'); // defaults to channel name
+      expect(items[0].status).toBe('pending');
+    });
+
+    it('channel_todo_create broadcasts todo_created and channel_todo_list', () => {
+      (ctx.router as any).clients.add(ctx.mockWs);
+
+      ctx.clearSent();
+      (ctx.router as any).handleChannelTodoCreate('test-channel', 'new channel task');
+
+      const created = ctx.sentOfType('todo_created');
+      expect(created).toHaveLength(1);
+      expect(created[0].item.content).toBe('new channel task');
+      expect(created[0].item.assignedChannel).toBe('test-channel');
+
+      const lists = ctx.sentOfType('channel_todo_list');
+      expect(lists).toHaveLength(1);
+      expect(lists[0].channelId).toBe('test-channel');
+      expect(lists[0].items).toHaveLength(1);
+    });
+
+    it('global todo_list still returns all items', () => {
+      (ctx.router as any).clients.add(ctx.mockWs);
+
+      // Create channel-specific and global items
+      (ctx.router as any).handleChannelTodoCreate('test-channel', 'channel task');
+      (ctx.router as any).handleTodoCreate('backlog', 'global task');
+
+      ctx.clearSent();
+      (ctx.router as any).handleTodoList(ctx.mockWs);
+
+      const lists = ctx.sentOfType('todo_list');
+      expect(lists).toHaveLength(1);
+      expect(lists[0].items).toHaveLength(2);
+    });
+  });
 });
