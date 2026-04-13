@@ -1,8 +1,9 @@
 {
   "name": "workshop",
-  "version": "0.2.0",
+  "version": "0.3.1",
   "private": true,
   "scripts": {
+    "test": "cd server && npm test && cd ../web && npm test",
     "dev:server": "cd server && npm run dev",
     "dev:web": "cd web && npm run dev",
     "build": "cd server && npm run build && cd ../web && npm run build",
