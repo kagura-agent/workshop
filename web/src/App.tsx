@@ -1,15 +1,18 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
+import { DmView } from './components/DmView';
 import { AgentList } from './components/AgentList';
 import { CreateChannelDialog } from './components/CreateChannelDialog';
 import { ChannelSettingsPanel } from './components/ChannelSettingsPanel';
 import { TodoPanel } from './components/TodoPanel';
 import { CronDashboard } from './components/CronDashboard';
 import { useWebSocket } from './hooks/useWebSocket';
-import type { Channel, Agent, Message, ServerMessage, TodoItem, NorthStar, Pin, PatrolConfig, Notification } from './types';
+import type { Channel, Agent, Message, ServerMessage, TodoItem, NorthStar, Pin, PatrolConfig, Notification, DirectMessage, DmConversation } from './types';
 
 const WS_URL = `ws://${window.location.hostname}:3100`;
+
+type ActiveView = { type: 'channel'; id: string } | { type: 'dm'; partnerId: string };
 
 export default function App() {
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -27,6 +30,10 @@ export default function App() {
   const [patrolConfig, setPatrolConfigState] = useState<PatrolConfig | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationBadges, setNotificationBadges] = useState<Record<string, number>>({});
+  const [activeView, setActiveView] = useState<ActiveView | null>(null);
+  const [dmMessages, setDmMessages] = useState<Record<string, DirectMessage[]>>({});
+  const [dmConversations, setDmConversations] = useState<DmConversation[]>([]);
+  const [dmUnread, setDmUnread] = useState<Record<string, number>>({});
 
   const handleMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
@@ -140,6 +147,21 @@ export default function App() {
       case 'agent_removed':
         setAgents((prev) => prev.filter((a) => a.id !== msg.id));
         break;
+      case 'dm_message':
+        setDmMessages((prev) => {
+          const partnerId = msg.message.fromId === 'user' ? msg.message.toId : msg.message.fromId;
+          return { ...prev, [partnerId]: [...(prev[partnerId] || []), msg.message] };
+        });
+        break;
+      case 'dm_list':
+        setDmMessages((prev) => ({ ...prev, [msg.withId]: msg.messages }));
+        break;
+      case 'dm_conversations':
+        setDmConversations(msg.conversations);
+        break;
+      case 'dm_unread':
+        setDmUnread(msg.counts);
+        break;
       case 'error':
         console.error('[workshop]', msg.message);
         break;
@@ -151,6 +173,22 @@ export default function App() {
   const handleSendMessage = (content: string) => {
     if (!activeChannelId) return;
     send({ type: 'send_message', channelId: activeChannelId, content });
+  };
+
+  const handleSendDm = (toId: string, content: string) => {
+    send({ type: 'send_dm', toId, content });
+  };
+
+  const handleListDms = (withId: string) => {
+    send({ type: 'list_dms', withId });
+  };
+
+  const handleDmMarkRead = (withId: string) => {
+    send({ type: 'dm_mark_read', withId });
+  };
+
+  const handleListDmConversations = () => {
+    send({ type: 'dm_conversations' });
   };
 
   const handleCreateChannel = (name: string, agentConfigs: { id: string; requireMention: boolean }[]) => {
@@ -215,6 +253,31 @@ export default function App() {
     }
   }, [activeChannelId, connected, send]);
 
+  // Request DM conversations on connect
+  useEffect(() => {
+    if (connected) {
+      handleListDmConversations();
+    }
+  }, [connected]);
+
+  // Load DM messages when switching to a DM view
+  useEffect(() => {
+    if (activeView?.type === 'dm' && connected) {
+      handleListDms(activeView.partnerId);
+      handleDmMarkRead(activeView.partnerId);
+    }
+  }, [activeView, connected]);
+
+  const selectChannel = (channelId: string) => {
+    setActiveChannelId(channelId);
+    setActiveView({ type: 'channel', id: channelId });
+  };
+
+  const selectDm = (partnerId: string) => {
+    setActiveChannelId(null);
+    setActiveView({ type: 'dm', partnerId });
+  };
+
   const handleEditChannel = () => {
     if (!activeChannelId) return;
     setEditingChannel(true);
@@ -236,28 +299,41 @@ export default function App() {
         activeChannelId={activeChannelId}
         notificationBadges={notificationBadges}
         patrolControlChannelId={patrolConfig?.controlChannelId ?? null}
-        onSelectChannel={setActiveChannelId}
+        onSelectChannel={selectChannel}
         onCreateChannel={handleCreateChannel}
-        onOpenSettings={(channelId) => { setActiveChannelId(channelId); setShowChannelSettings(true); }}
+        onOpenSettings={(channelId) => { selectChannel(channelId); setShowChannelSettings(true); }}
         onOpenCronDashboard={() => setShowCronDashboard(true)}
+        dmUnread={dmUnread}
+        activeDmPartnerId={activeView?.type === 'dm' ? activeView.partnerId : null}
+        onSelectDm={selectDm}
       />
-      <ChatView
-        channel={activeChannel ?? null}
-        messages={activeChannelId ? (messages[activeChannelId] || []) : []}
-        channelAgents={channelAgents}
-        typingNames={typingNames}
-        pins={activeChannelId ? (pins[activeChannelId] || []) : []}
-        notifications={notifications.filter(n => n.targetChannelId === activeChannelId)}
-        isPatrolChannel={patrolConfig?.controlChannelId === activeChannelId}
-        onSendMessage={handleSendMessage}
-        onEditChannel={activeChannel ? handleEditChannel : undefined}
-        onOpenSettings={activeChannel ? () => setShowChannelSettings(true) : undefined}
-        onToggleTodo={() => setShowTodoPanel((v) => !v)}
-        onPatrolTrigger={handlePatrolTrigger}
-        onPinCreate={(channelId, content, label) => send({ type: 'pin_create', channelId, content, label })}
-        onPinMessage={(channelId, messageId) => send({ type: 'pin_message', channelId, messageId })}
-        onPinDelete={(pinId) => send({ type: 'pin_delete', pinId })}
-      />
+      {activeView?.type === 'dm' ? (
+        <DmView
+          partnerId={activeView.partnerId}
+          partnerAgent={agents.find(a => a.id === activeView.partnerId) ?? null}
+          messages={dmMessages[activeView.partnerId] || []}
+          onSendMessage={(content) => handleSendDm(activeView.partnerId, content)}
+          onMarkRead={() => handleDmMarkRead(activeView.partnerId)}
+        />
+      ) : (
+        <ChatView
+          channel={activeChannel ?? null}
+          messages={activeChannelId ? (messages[activeChannelId] || []) : []}
+          channelAgents={channelAgents}
+          typingNames={typingNames}
+          pins={activeChannelId ? (pins[activeChannelId] || []) : []}
+          notifications={notifications.filter(n => n.targetChannelId === activeChannelId)}
+          isPatrolChannel={patrolConfig?.controlChannelId === activeChannelId}
+          onSendMessage={handleSendMessage}
+          onEditChannel={activeChannel ? handleEditChannel : undefined}
+          onOpenSettings={activeChannel ? () => setShowChannelSettings(true) : undefined}
+          onToggleTodo={() => setShowTodoPanel((v) => !v)}
+          onPatrolTrigger={handlePatrolTrigger}
+          onPinCreate={(channelId, content, label) => send({ type: 'pin_create', channelId, content, label })}
+          onPinMessage={(channelId, messageId) => send({ type: 'pin_message', channelId, messageId })}
+          onPinDelete={(pinId) => send({ type: 'pin_delete', pinId })}
+        />
+      )}
       {showTodoPanel && (
         <TodoPanel
           items={todoItems}
