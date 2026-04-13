@@ -187,6 +187,19 @@ function initSchema(): void {
   if (!hasColumn(d, 'messages', 'is_urgent')) {
     d.exec("ALTER TABLE messages ADD COLUMN is_urgent INTEGER NOT NULL DEFAULT 0");
   }
+
+  // Direct messages
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS direct_messages (
+      id TEXT PRIMARY KEY,
+      from_id TEXT NOT NULL,
+      to_id TEXT NOT NULL,
+      content TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      read INTEGER DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_dm_participants ON direct_messages(from_id, to_id);
+  `);
 }
 
 export function close(): void {
