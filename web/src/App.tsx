@@ -74,6 +74,10 @@ export default function App() {
       case 'channel_meta_updated':
         setChannels((prev) => prev.map((c) => c.id === msg.channel.id ? msg.channel : c));
         break;
+      case 'channel_deleted':
+        setChannels((prev) => prev.filter((c) => c.id !== msg.channelId));
+        setActiveChannelId((prev) => prev === msg.channelId ? null : prev);
+        break;
       case 'todo_list':
         setTodoItems(msg.items);
         break;
@@ -189,6 +193,18 @@ export default function App() {
     send({ type: 'remove_agent', id });
   };
 
+  const handleDeleteChannel = (channelId: string) => {
+    send({ type: 'delete_channel', channelId });
+  };
+
+  const handleArchiveChannel = (channelId: string) => {
+    send({ type: 'archive_channel', channelId });
+  };
+
+  const handleRenameChannel = (channelId: string, name: string) => {
+    send({ type: 'rename_channel', channelId, name });
+  };
+
   // Request pins when active channel changes
   useEffect(() => {
     if (activeChannelId && connected) {
@@ -285,6 +301,9 @@ export default function App() {
             setShowChannelSettings(false);
           }}
           onPatrolConfigSave={handlePatrolConfigSet}
+          onDeleteChannel={handleDeleteChannel}
+          onArchiveChannel={handleArchiveChannel}
+          onRenameChannel={handleRenameChannel}
         />
       )}
       {showCronDashboard && (

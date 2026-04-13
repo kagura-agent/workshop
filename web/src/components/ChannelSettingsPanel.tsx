@@ -14,6 +14,9 @@ interface ChannelSettingsPanelProps {
   onCronTrigger?: (channelId: string) => void;
   cronHistory?: CronExecution[];
   onPatrolConfigSave?: (config: Partial<PatrolConfig>) => void;
+  onDeleteChannel?: (channelId: string) => void;
+  onArchiveChannel?: (channelId: string) => void;
+  onRenameChannel?: (channelId: string, name: string) => void;
 }
 
 const CHANNEL_TYPES: { value: ChannelType; label: string }[] = [
@@ -22,7 +25,7 @@ const CHANNEL_TYPES: { value: ChannelType; label: string }[] = [
   { value: 'meta', label: 'Meta' },
 ];
 
-export function ChannelSettingsPanel({ channel, patrolConfig, channels, onClose, onSave, onCronTrigger, cronHistory, onPatrolConfigSave }: ChannelSettingsPanelProps) {
+export function ChannelSettingsPanel({ channel, patrolConfig, channels, onClose, onSave, onCronTrigger, cronHistory, onPatrolConfigSave, onDeleteChannel, onArchiveChannel, onRenameChannel }: ChannelSettingsPanelProps) {
   const [type, setType] = useState<ChannelType>(channel.type);
   const [positioning, setPositioning] = useState(channel.positioning);
   const [guidelines, setGuidelines] = useState(channel.guidelines);
@@ -30,6 +33,9 @@ export function ChannelSettingsPanel({ channel, patrolConfig, channels, onClose,
   const [todoSection, setTodoSection] = useState(channel.todoSection ?? '');
   const [cronSchedule, setCronSchedule] = useState(channel.cronSchedule ?? '');
   const [cronEnabled, setCronEnabled] = useState(channel.cronEnabled);
+  const [renameName, setRenameName] = useState(channel.name);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Patrol state
   const [patrolSchedule, setPatrolSchedule] = useState(patrolConfig?.schedule ?? '0 */3 * * *');
@@ -241,6 +247,88 @@ export function ChannelSettingsPanel({ channel, patrolConfig, channels, onClose,
               </div>
             </div>
           )}
+
+          {/* Channel Management */}
+          <div className="space-y-3 pt-3 border-t border-border">
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Channel Management</Label>
+
+            {/* Rename */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Rename Channel</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={renameName}
+                  onChange={(e) => setRenameName(e.target.value)}
+                  className="bg-muted text-sm flex-1"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                  disabled={!renameName.trim() || renameName === channel.name}
+                  onClick={() => {
+                    onRenameChannel?.(channel.id, renameName.trim());
+                  }}
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
+
+            {/* Archive / Unarchive */}
+            <Button
+              variant="outline"
+              size="sm"
+              className={`text-xs w-full ${channel.status === 'archived' ? 'text-green-400 border-green-400/40 hover:bg-green-400/10' : 'text-blue-400 border-blue-400/40 hover:bg-blue-400/10'}`}
+              onClick={() => onArchiveChannel?.(channel.id)}
+            >
+              {channel.status === 'archived' ? 'Unarchive Channel' : 'Archive Channel'}
+            </Button>
+
+            {/* Delete */}
+            {!showDeleteConfirm ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs w-full text-red-400 border-red-400/40 hover:bg-red-400/10"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                Delete Channel
+              </Button>
+            ) : (
+              <div className="space-y-2 p-2 rounded border border-red-400/40 bg-red-400/5">
+                <p className="text-xs text-red-400">Type <strong>{channel.name}</strong> to confirm deletion:</p>
+                <Input
+                  value={deleteConfirm}
+                  onChange={(e) => setDeleteConfirm(e.target.value)}
+                  placeholder={channel.name}
+                  className="bg-muted text-sm"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs flex-1"
+                    onClick={() => { setShowDeleteConfirm(false); setDeleteConfirm(''); }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs flex-1 text-red-400 border-red-400/40 hover:bg-red-400/10"
+                    disabled={deleteConfirm !== channel.name}
+                    onClick={() => {
+                      onDeleteChannel?.(channel.id);
+                      onClose();
+                    }}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="p-4 border-t border-border flex justify-end gap-2">
