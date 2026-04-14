@@ -49,12 +49,12 @@ export function seedTestData(db: ReturnType<typeof getDb>) {
   );
 
   db.prepare(
-    'INSERT INTO channels (id, name, created_at, type, positioning, guidelines, north_star, cron_schedule, cron_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run('test-channel', 'Test Channel', new Date().toISOString(), 'project', 'test positioning', 'test guidelines', '', null, 0);
+    'INSERT INTO channels (id, name, created_at, type, positioning, guidelines, cron_schedule, cron_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run('test-channel', 'Test Channel', new Date().toISOString(), 'project', 'test positioning', 'test guidelines', null, 0);
 
   db.prepare(
-    'INSERT INTO channels (id, name, created_at, type, positioning, guidelines, north_star, cron_schedule, cron_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run('other-channel', 'Other Channel', new Date().toISOString(), 'daily', '', '', '', null, 0);
+    'INSERT INTO channels (id, name, created_at, type, positioning, guidelines, cron_schedule, cron_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run('other-channel', 'Other Channel', new Date().toISOString(), 'daily', '', '', null, 0);
 
   // agent-1 sees all, agent-2 requires mention
   db.prepare('INSERT INTO channel_agents (channel_id, agent_id, require_mention) VALUES (?, ?, ?)').run(

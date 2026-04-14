@@ -107,7 +107,7 @@ export default function App() {
     send({ type: 'update_channel', channelId, agents: agentConfigs });
   };
 
-  const handleUpdateChannelMeta = (channelId: string, metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'northStar' | 'cronSchedule' | 'cronEnabled'>>) => {
+  const handleUpdateChannelMeta = (channelId: string, metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'cronSchedule' | 'cronEnabled'>>) => {
     send({ type: 'update_channel_meta', channelId, metadata });
   };
 

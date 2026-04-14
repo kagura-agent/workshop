@@ -18,7 +18,6 @@ export interface Channel {
   type: ChannelType;
   positioning: string;
   guidelines: string;
-  northStar: string;
   cronSchedule: string | null;
   cronEnabled: boolean;
 }
@@ -30,13 +29,6 @@ export interface CronExecution {
   agentIds: string[];
   promptSnippet: string;
   status: string;
-}
-
-export interface NorthStar {
-  id: string;
-  scope: 'global' | string;
-  content: string;
-  updatedAt: string;
 }
 
 export interface Message {
@@ -61,8 +53,6 @@ export type ServerMessage =
   | { type: 'channel_meta_updated'; channel: Channel }
   | { type: 'cron_fired'; channelId: string; execution: CronExecution }
   | { type: 'cron_history'; channelId: string; executions: CronExecution[] }
-  | { type: 'north_star'; star: NorthStar }
-  | { type: 'north_star_list'; stars: NorthStar[] }
   | { type: 'patrol_config'; config: PatrolConfig | null }
   | { type: 'patrol_fired'; controlChannelId: string }
   | { type: 'channel_deleted'; channelId: string }
@@ -76,13 +66,11 @@ export type ClientMessage =
   | { type: 'send_message'; channelId: string; content: string }
   | { type: 'create_channel'; name: string; agents: { id: string; requireMention: boolean }[] }
   | { type: 'update_channel'; channelId: string; agents: { id: string; requireMention: boolean }[] }
-  | { type: 'update_channel_meta'; channelId: string; metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'northStar' | 'cronSchedule' | 'cronEnabled'>> }
+  | { type: 'update_channel_meta'; channelId: string; metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'cronSchedule' | 'cronEnabled'>> }
   | { type: 'list_channels' }
   | { type: 'list_agents' }
   | { type: 'cron_trigger'; channelId: string }
   | { type: 'cron_history'; channelId: string }
-  | { type: 'north_star_get'; scope?: string }
-  | { type: 'north_star_set'; scope: string; content: string }
   | { type: 'patrol_config_get' }
   | { type: 'patrol_config_set'; config: Partial<PatrolConfig> }
   | { type: 'patrol_trigger' }

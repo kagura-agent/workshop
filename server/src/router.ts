@@ -4,7 +4,7 @@ import { getDb } from './db.js';
 import { GatewayConnection } from './gateway.js';
 import { ChannelCronManager } from './cron.js';
 import { getPatrolConfig, setPatrolConfig } from './patrol.js';
-import type { ClientMessage, ServerMessage, Message, Channel, Agent, CronExecution, NorthStar, PatrolConfig } from './types.js';
+import type { ClientMessage, ServerMessage, Message, Channel, Agent, CronExecution, PatrolConfig } from './types.js';
 
 /**
  * Router — bridges frontend WebSocket clients with a single shared OpenClaw Gateway connection.
@@ -22,7 +22,6 @@ export class Router {
     // Immediately send current channels and agents so the UI populates on load
     this.handleListChannels(ws);
     this.handleListAgents(ws);
-    this.handleNorthStarGet(ws); // send all north stars
 
     // Send message history for all active channels
     this.sendAllChannelHistory(ws);
@@ -133,12 +132,6 @@ export class Router {
         break;
       case 'cron_history':
         this.handleCronHistory(ws, msg.channelId);
-        break;
-      case 'north_star_get':
-        this.handleNorthStarGet(ws, msg.scope);
-        break;
-      case 'north_star_set':
-        this.handleNorthStarSet(msg.scope, msg.content);
         break;
       case 'patrol_config_get':
         this.handlePatrolConfigGet(ws);
@@ -260,7 +253,6 @@ export class Router {
     db.prepare('DELETE FROM channel_agents WHERE channel_id = ?').run(channelId);
     db.prepare('DELETE FROM messages WHERE channel_id = ?').run(channelId);
     db.prepare('DELETE FROM cron_executions WHERE channel_id = ?').run(channelId);
-    db.prepare('DELETE FROM north_stars WHERE scope = ?').run(channelId);
 
     // Stop cron
     if (this.cronManager) {
@@ -299,7 +291,7 @@ export class Router {
           agentConfigs: agents.map(a => ({ id: a.agent_id, requireMention: !!a.require_mention })),
           createdAt: updated.created_at, status: updated.status,
           type: updated.type ?? 'project', positioning: updated.positioning ?? '',
-          guidelines: updated.guidelines ?? '', northStar: updated.north_star ?? '',
+          guidelines: updated.guidelines ?? '',
           cronSchedule: updated.cron_schedule ?? null,
           cronEnabled: !!updated.cron_enabled,
         };
@@ -318,7 +310,7 @@ export class Router {
       agentConfigs: agents.map(a => ({ id: a.agent_id, requireMention: !!a.require_mention })),
       createdAt: updated.created_at, status: updated.status,
       type: updated.type ?? 'project', positioning: updated.positioning ?? '',
-      guidelines: updated.guidelines ?? '', northStar: updated.north_star ?? '',
+      guidelines: updated.guidelines ?? '',
       cronSchedule: updated.cron_schedule ?? null,
       cronEnabled: !!updated.cron_enabled,
     };
@@ -343,7 +335,7 @@ export class Router {
       agentConfigs: agents.map(a => ({ id: a.agent_id, requireMention: !!a.require_mention })),
       createdAt: row.created_at, status: row.status,
       type: row.type ?? 'project', positioning: row.positioning ?? '',
-      guidelines: row.guidelines ?? '', northStar: row.north_star ?? '',
+      guidelines: row.guidelines ?? '',
       cronSchedule: row.cron_schedule ?? null,
       cronEnabled: !!row.cron_enabled,
     };
@@ -368,7 +360,6 @@ export class Router {
         type: r.type ?? 'project',
         positioning: r.positioning ?? '',
         guidelines: r.guidelines ?? '',
-        northStar: r.north_star ?? '',
         cronSchedule: r.cron_schedule ?? null,
         cronEnabled: !!r.cron_enabled,
       };
@@ -392,7 +383,7 @@ export class Router {
     _ws: WebSocket,
     name: string,
     agents: { id: string; requireMention: boolean }[],
-    metadata?: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'northStar' | 'cronSchedule' | 'cronEnabled'>>,
+    metadata?: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'cronSchedule' | 'cronEnabled'>>,
   ): void {
     const db = getDb();
     const id = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
@@ -401,13 +392,12 @@ export class Router {
     const channelType = metadata?.type ?? 'project';
     const positioning = metadata?.positioning ?? '';
     const guidelines = metadata?.guidelines ?? '';
-    const northStar = metadata?.northStar ?? '';
     const cronSchedule = metadata?.cronSchedule ?? null;
     const cronEnabled = metadata?.cronEnabled ? 1 : 0;
 
     db.prepare(
-      'INSERT INTO channels (id, name, created_at, type, positioning, guidelines, north_star, cron_schedule, cron_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(id, name, now, channelType, positioning, guidelines, northStar, cronSchedule, cronEnabled);
+      'INSERT INTO channels (id, name, created_at, type, positioning, guidelines, cron_schedule, cron_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(id, name, now, channelType, positioning, guidelines, cronSchedule, cronEnabled);
 
     for (const agent of agents) {
       db.prepare(
@@ -419,7 +409,7 @@ export class Router {
     const agentConfigs = agents.map(a => ({ id: a.id, requireMention: a.requireMention }));
     const channel: Channel = {
       id, name, agents: agentIds, agentConfigs, createdAt: now, status: 'active',
-      type: channelType, positioning, guidelines, northStar, cronSchedule,
+      type: channelType, positioning, guidelines, cronSchedule,
       cronEnabled: !!cronEnabled,
     };
     this.broadcast({ type: 'channel_created', channel });
@@ -447,7 +437,6 @@ export class Router {
     const channel: Channel = {
       id: row.id, name: row.name, agents: agentIds, agentConfigs, createdAt: row.created_at, status: row.status,
       type: row.type ?? 'project', positioning: row.positioning ?? '', guidelines: row.guidelines ?? '',
-      northStar: row.north_star ?? '',
       cronSchedule: row.cron_schedule ?? null, cronEnabled: !!row.cron_enabled,
     };
     this.broadcast({ type: 'channel_updated', channel });
@@ -455,7 +444,7 @@ export class Router {
 
   private handleUpdateChannelMeta(
     channelId: string,
-    metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'northStar' | 'cronSchedule' | 'cronEnabled'>>,
+    metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'cronSchedule' | 'cronEnabled'>>,
   ): void {
     const db = getDb();
     const row = db.prepare('SELECT * FROM channels WHERE id = ?').get(channelId) as any;
@@ -467,7 +456,6 @@ export class Router {
     if (metadata.type !== undefined) { updates.push('type = ?'); values.push(metadata.type); }
     if (metadata.positioning !== undefined) { updates.push('positioning = ?'); values.push(metadata.positioning); }
     if (metadata.guidelines !== undefined) { updates.push('guidelines = ?'); values.push(metadata.guidelines); }
-    if (metadata.northStar !== undefined) { updates.push('north_star = ?'); values.push(metadata.northStar); }
     if (metadata.cronSchedule !== undefined) { updates.push('cron_schedule = ?'); values.push(metadata.cronSchedule); }
     if (metadata.cronEnabled !== undefined) { updates.push('cron_enabled = ?'); values.push(metadata.cronEnabled ? 1 : 0); }
 
@@ -488,7 +476,7 @@ export class Router {
       agentConfigs: agents.map(a => ({ id: a.agent_id, requireMention: !!a.require_mention })),
       createdAt: updated.created_at, status: updated.status,
       type: updated.type ?? 'project', positioning: updated.positioning ?? '',
-      guidelines: updated.guidelines ?? '', northStar: updated.north_star ?? '',
+      guidelines: updated.guidelines ?? '',
       cronSchedule: updated.cron_schedule ?? null,
       cronEnabled: !!updated.cron_enabled,
     };
@@ -498,47 +486,6 @@ export class Router {
     if (this.cronManager && (metadata.cronSchedule !== undefined || metadata.cronEnabled !== undefined)) {
       this.cronManager.syncChannel(channel);
     }
-  }
-
-  // --- North Star handlers ---
-
-  private handleNorthStarGet(ws: WebSocket, scope?: string): void {
-    const db = getDb();
-    if (scope) {
-      const row = db.prepare('SELECT * FROM north_stars WHERE scope = ?').get(scope) as any;
-      if (row) {
-        this.sendTo(ws, { type: 'north_star', star: this.mapNorthStarRow(row) });
-      } else {
-        // Return empty star for the requested scope
-        this.sendTo(ws, { type: 'north_star', star: { id: '', scope, content: '', updatedAt: '' } });
-      }
-    } else {
-      const rows = db.prepare('SELECT * FROM north_stars ORDER BY updated_at DESC').all() as any[];
-      const stars: NorthStar[] = rows.map(this.mapNorthStarRow);
-      this.sendTo(ws, { type: 'north_star_list', stars });
-    }
-  }
-
-  private handleNorthStarSet(scope: string, content: string): void {
-    const db = getDb();
-    const existing = db.prepare('SELECT * FROM north_stars WHERE scope = ?').get(scope) as any;
-    const now = new Date().toISOString();
-
-    let star: NorthStar;
-    if (existing) {
-      db.prepare('UPDATE north_stars SET content = ?, updated_at = ? WHERE scope = ?').run(content, now, scope);
-      star = { id: existing.id, scope, content, updatedAt: now };
-    } else {
-      const id = uuid();
-      db.prepare('INSERT INTO north_stars (id, scope, content, updated_at) VALUES (?, ?, ?, ?)').run(id, scope, content, now);
-      star = { id, scope, content, updatedAt: now };
-    }
-
-    this.broadcast({ type: 'north_star', star });
-  }
-
-  private mapNorthStarRow(r: any): NorthStar {
-    return { id: r.id, scope: r.scope, content: r.content, updatedAt: r.updated_at };
   }
 
   // --- Cron handlers ---
@@ -730,7 +677,7 @@ export class Router {
         agentConfigs: agents.map(a => ({ id: a.agent_id, requireMention: !!a.require_mention })),
         createdAt: row.created_at, status: row.status,
         type: row.type ?? 'project', positioning: row.positioning ?? '',
-        guidelines: row.guidelines ?? '', northStar: row.north_star ?? '',
+        guidelines: row.guidelines ?? '',
         cronSchedule: row.cron_schedule ?? null,
         cronEnabled: !!row.cron_enabled,
       };
