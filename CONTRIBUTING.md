@@ -59,8 +59,12 @@ QA (Ren) 的职责：
 1. 启动 server + web（`npm run dev:server` + `npm run dev:web`）
 2. 在浏览器里实际操作测试功能
 3. 截图关键页面/交互
-4. 截图贴到 PR comment 里
+4. 截图贴到 PR comment 里（⚠️ **不要 commit 截图到代码库** — 二进制文件会撑大 git history）
 5. 没有截图 = 没有测试 = 不能 merge
+
+截图上传方式（不占 repo 空间）：
+- 用 `gh issue comment` 或 GitHub web UI 上传图片，拿到 `user-images.githubusercontent.com` URL
+- 然后用该 URL 贴到 PR comment 的 markdown 里
 
 截图要求：
 - 修复前 vs 修复后（如果是 bug fix）
