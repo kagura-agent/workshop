@@ -43,12 +43,29 @@ Strip to absolute minimum:
 - **Web:** React + Vite + Tailwind + shadcn/ui (`web/`)
 - **Gateway:** OpenClaw gateway integration
 
-## Test Commands
+## Test Requirements
 
+### Unit Tests
 - Server: `cd server && npm test`
 - Web: `cd web && npm test`
 - Build: `cd web && npm run build`
 - Full: `npm test` (root)
+
+### 实机测试（必须）
+
+**每个 PR 必须包含实机测试截图。** Unit test 通过不够 — 必须启动实际应用，在浏览器里操作验证。
+
+QA (Ren) 的职责：
+1. 启动 server + web（`npm run dev:server` + `npm run dev:web`）
+2. 在浏览器里实际操作测试功能
+3. 截图关键页面/交互
+4. 截图贴到 PR comment 里
+5. 没有截图 = 没有测试 = 不能 merge
+
+截图要求：
+- 修复前 vs 修复后（如果是 bug fix）
+- 正常功能截图（如果是新功能）
+- 边界情况截图（如果有）
 
 ## Dev Environment
 
