@@ -4,7 +4,7 @@ import { getDb } from './db.js';
 import { GatewayConnection } from './gateway.js';
 import { ChannelCronManager } from './cron.js';
 import { getPatrolConfig, setPatrolConfig } from './patrol.js';
-import type { ClientMessage, ServerMessage, Message, Channel, Agent, CronExecution, NorthStar, Pin, PatrolConfig, Notification, NotificationTrigger, DirectMessage, DmConversation } from './types.js';
+import type { ClientMessage, ServerMessage, Message, Channel, Agent, CronExecution, NorthStar, Pin, PatrolConfig, DirectMessage, DmConversation } from './types.js';
 
 /**
  * Router — bridges frontend WebSocket clients with a single shared OpenClaw Gateway connection.
@@ -26,7 +26,6 @@ export class Router {
 
     // Send message history for all active channels
     this.sendAllChannelHistory(ws);
-    this.sendAllNotificationBadges(ws);
     this.handlePatrolConfigGet(ws);
     this.sendDmUnread(ws);
 
@@ -101,9 +100,6 @@ export class Router {
 
       const msg = this.storeMessage(channelId, agentId, senderName, 'assistant', content);
       this.broadcast({ type: 'message', channelId, message: msg });
-
-      // Parse @notify cross-posts in agent responses
-      this.parseNotifyCommands(channelId, content);
     };
 
     gw.onStatusChange = (status) => {
@@ -188,9 +184,6 @@ export class Router {
       case 'patrol_trigger':
         this.handlePatrolTrigger();
         break;
-      case 'notification_mark_read':
-        this.handleNotificationMarkRead(msg.channelId);
-        break;
       case 'register_agent':
         this.handleRegisterAgent(ws, msg.agent);
         break;
@@ -274,7 +267,7 @@ export class Router {
     let match: RegExpExecArray | null;
     while ((match = mentionPattern.exec(content)) !== null) {
       const name = match[1].toLowerCase();
-      if (name === 'urgent' || name === 'notify') continue;
+      if (name === 'urgent') continue;
       mentions.add(name);
     }
 
@@ -314,7 +307,6 @@ export class Router {
     db.prepare('DELETE FROM channel_agents WHERE channel_id = ?').run(channelId);
     db.prepare('DELETE FROM messages WHERE channel_id = ?').run(channelId);
     db.prepare('DELETE FROM pins WHERE channel_id = ?').run(channelId);
-    db.prepare('DELETE FROM notifications WHERE source_channel_id = ? OR target_channel_id = ?').run(channelId, channelId);
     db.prepare('DELETE FROM cron_executions WHERE channel_id = ?').run(channelId);
     db.prepare('DELETE FROM north_stars WHERE scope = ?').run(channelId);
 
@@ -795,84 +787,6 @@ export class Router {
     const config = getPatrolConfig();
     if (config) {
       this.broadcast({ type: 'patrol_fired', controlChannelId: config.controlChannelId });
-    }
-  }
-
-  // --- Notification handlers ---
-
-  /** Create and broadcast a notification. */
-  private postNotification(
-    sourceChannelId: string,
-    targetChannelId: string,
-    content: string,
-    trigger: 'agent_crosspost' | 'patrol',
-  ): void {
-    const db = getDb();
-    const id = uuid();
-    const now = new Date().toISOString();
-
-    db.prepare(
-      'INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, ?, 0)'
-    ).run(id, sourceChannelId, targetChannelId, content, trigger, now);
-
-    const notification: Notification = {
-      id, sourceChannelId, targetChannelId, content, trigger,
-      createdAt: now, read: false,
-    };
-
-    this.broadcast({ type: 'notification', notification });
-    this.broadcastNotificationBadge(targetChannelId);
-  }
-
-  private handleNotificationMarkRead(channelId: string): void {
-    const db = getDb();
-    db.prepare('UPDATE notifications SET read = 1 WHERE target_channel_id = ? AND read = 0').run(channelId);
-    this.broadcastNotificationBadge(channelId);
-  }
-
-  private broadcastNotificationBadge(channelId: string): void {
-    const db = getDb();
-    const row = db.prepare(
-      'SELECT COUNT(*) as cnt FROM notifications WHERE target_channel_id = ? AND read = 0'
-    ).get(channelId) as any;
-    this.broadcast({ type: 'notification_badge', channelId, unreadCount: row?.cnt ?? 0 });
-  }
-
-  /** Send notification badges for all channels to a newly connected client. */
-  private sendAllNotificationBadges(ws: WebSocket): void {
-    const db = getDb();
-    const rows = db.prepare(
-      'SELECT target_channel_id, COUNT(*) as cnt FROM notifications WHERE read = 0 GROUP BY target_channel_id'
-    ).all() as any[];
-
-    for (const row of rows) {
-      this.sendTo(ws, { type: 'notification_badge', channelId: row.target_channel_id, unreadCount: row.cnt });
-    }
-  }
-
-  /** Parse @notify #channel-name: message patterns in agent responses. */
-  private parseNotifyCommands(sourceChannelId: string, content: string): void {
-    const pattern = /@notify\s+#([\w-]+):\s*(.+?)(?=@notify\s+#|$)/gs;
-    let match: RegExpExecArray | null;
-
-    while ((match = pattern.exec(content)) !== null) {
-      const targetName = match[1];
-      const notifyContent = match[2].trim();
-
-      const db = getDb();
-      const targetChannel = db.prepare(
-        "SELECT id FROM channels WHERE LOWER(name) = LOWER(?)"
-      ).get(targetName) as any;
-
-      if (!targetChannel) {
-        console.warn(`[notify] target channel not found: #${targetName}`);
-        continue;
-      }
-
-      if (targetChannel.id === sourceChannelId) continue;
-
-      console.log(`[notify] #${sourceChannelId} → #${targetChannel.id}: "${notifyContent.slice(0, 80)}"`);
-      this.postNotification(sourceChannelId, targetChannel.id, notifyContent, 'agent_crosspost');
     }
   }
 

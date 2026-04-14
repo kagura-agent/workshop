@@ -76,7 +76,6 @@ export type ClientMessage =
   | { type: 'patrol_config_get' }
   | { type: 'patrol_config_set'; config: Partial<PatrolConfig> }
   | { type: 'patrol_trigger' }
-  | { type: 'notification_mark_read'; channelId: string }
   | { type: 'delete_channel'; channelId: string }
   | { type: 'archive_channel'; channelId: string }
   | { type: 'rename_channel'; channelId: string; name: string }
@@ -106,8 +105,6 @@ export type ServerMessage =
   | { type: 'pin_deleted'; channelId: string; pinId: string }
   | { type: 'patrol_config'; config: PatrolConfig | null }
   | { type: 'patrol_fired'; controlChannelId: string }
-  | { type: 'notification'; notification: Notification }
-  | { type: 'notification_badge'; channelId: string; unreadCount: number }
   | { type: 'channel_deleted'; channelId: string }
   | { type: 'agent_registered'; agent: Agent }
   | { type: 'agent_updated'; agent: Agent }
@@ -152,16 +149,4 @@ export interface PatrolConfig {
   enabled: boolean;
   lastPatrolAt: string | null;
   channelFilter: string[];
-}
-
-export type NotificationTrigger = 'agent_crosspost' | 'patrol';
-
-export interface Notification {
-  id: string;
-  sourceChannelId: string;
-  targetChannelId: string;
-  content: string;
-  trigger: NotificationTrigger;
-  createdAt: string;
-  read: boolean;
 }

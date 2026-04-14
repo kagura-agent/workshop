@@ -143,21 +143,6 @@ function initSchema(): void {
     );
   `);
 
-  // v0.3 §5: Notifications
-  d.exec(`
-    CREATE TABLE IF NOT EXISTS notifications (
-      id TEXT PRIMARY KEY,
-      source_channel_id TEXT NOT NULL,
-      target_channel_id TEXT NOT NULL,
-      content TEXT NOT NULL,
-      trigger_type TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      read INTEGER NOT NULL DEFAULT 0,
-      FOREIGN KEY (source_channel_id) REFERENCES channels(id),
-      FOREIGN KEY (target_channel_id) REFERENCES channels(id)
-    );
-  `);
-
   // v0.3 §6: Urgent flag on messages
   if (!hasColumn(d, 'messages', 'is_urgent')) {
     d.exec("ALTER TABLE messages ADD COLUMN is_urgent INTEGER NOT NULL DEFAULT 0");
