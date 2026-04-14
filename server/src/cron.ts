@@ -70,7 +70,6 @@ export class ChannelCronManager {
       positioning: row.positioning ?? '',
       guidelines: row.guidelines ?? '',
       northStar: row.north_star ?? '',
-      todoSection: row.todo_section ?? null,
       cronSchedule: row.cron_schedule ?? null,
       cronEnabled: !!row.cron_enabled,
     };
@@ -203,7 +202,6 @@ export class ChannelCronManager {
         positioning: row.positioning ?? '',
         guidelines: row.guidelines ?? '',
         northStar: row.north_star ?? '',
-        todoSection: row.todo_section ?? null,
         cronSchedule: row.cron_schedule ?? null,
         cronEnabled: !!row.cron_enabled,
       };
