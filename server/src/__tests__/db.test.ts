@@ -21,8 +21,6 @@ describe('db.ts - Schema initialization', () => {
     expect(names).toContain('channels');
     expect(names).toContain('channel_agents');
     expect(names).toContain('messages');
-    expect(names).toContain('todo_items');
-    expect(names).toContain('todo_history');
     expect(names).toContain('cron_executions');
     expect(names).toContain('north_stars');
     expect(names).toContain('pins');
@@ -39,7 +37,6 @@ describe('db.ts - Schema initialization', () => {
     expect(colNames).toContain('positioning');
     expect(colNames).toContain('guidelines');
     expect(colNames).toContain('north_star');
-    expect(colNames).toContain('todo_section');
     expect(colNames).toContain('cron_schedule');
     expect(colNames).toContain('cron_enabled');
   });
@@ -83,21 +80,6 @@ describe('db.ts - Schema initialization', () => {
     expect(colNames).toContain('channel_id');
     expect(colNames).toContain('agent_id');
     expect(colNames).toContain('require_mention');
-  });
-
-  it('todo_items has all expected columns', () => {
-    const db = getDb();
-    const cols = db.prepare('PRAGMA table_info(todo_items)').all() as { name: string }[];
-    const colNames = cols.map((c) => c.name);
-
-    expect(colNames).toContain('id');
-    expect(colNames).toContain('section');
-    expect(colNames).toContain('content');
-    expect(colNames).toContain('status');
-    expect(colNames).toContain('assigned_channel');
-    expect(colNames).toContain('assigned_agent');
-    expect(colNames).toContain('created_at');
-    expect(colNames).toContain('updated_at');
   });
 
   it('notifications has all expected columns', () => {

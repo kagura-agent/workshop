@@ -506,7 +506,6 @@ describe('router.ts - Core business logic', () => {
       db.prepare("INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)").run('notif-2', 'other-channel', 'test-channel', 'notif2', 'todo_change');
       db.prepare("INSERT INTO cron_executions (id, channel_id, fired_at, agent_ids, prompt_snippet, status) VALUES (?, ?, datetime('now'), ?, ?, ?)").run('exec-1', 'test-channel', '["agent-1"]', 'snippet', 'sent');
       db.prepare("INSERT INTO north_stars (id, scope, content, updated_at) VALUES (?, ?, ?, datetime('now'))").run('ns-1', 'test-channel', 'goal');
-      db.prepare("INSERT INTO todo_items (id, section, content, status, assigned_channel, assigned_agent, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))").run('todo-1', 'backlog', 'task', 'pending', 'test-channel', null);
 
       ctx.clearSent();
       (ctx.router as any).handleDeleteChannel('test-channel');
@@ -521,11 +520,6 @@ describe('router.ts - Core business logic', () => {
       expect(db.prepare("SELECT * FROM notifications WHERE source_channel_id = 'test-channel' OR target_channel_id = 'test-channel'").all()).toHaveLength(0);
       expect(db.prepare('SELECT * FROM cron_executions WHERE channel_id = ?').all('test-channel')).toHaveLength(0);
       expect(db.prepare("SELECT * FROM north_stars WHERE scope = 'test-channel'").all()).toHaveLength(0);
-
-      // Todo assignment cleared but todo still exists
-      const todo = db.prepare('SELECT * FROM todo_items WHERE id = ?').get('todo-1') as any;
-      expect(todo).toBeTruthy();
-      expect(todo.assigned_channel).toBeNull();
 
       // Broadcast
       const deleted = ctx.sentOfType('channel_deleted');
