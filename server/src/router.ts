@@ -61,7 +61,11 @@ export class Router {
     gw.onTyping = (agentId: string, channelId: string) => {
       const agent = this.agents.get(agentId);
       const agentName = agent?.name ?? agentId;
-      this.broadcast({ type: 'typing', channelId, agentId, agentName });
+      if (channelId.startsWith('dm-')) {
+        this.broadcast({ type: 'dm_typing', agentId, agentName });
+      } else {
+        this.broadcast({ type: 'typing', channelId, agentId, agentName });
+      }
     };
 
     gw.onMessage = (agentId: string, channelId: string, content: string) => {
@@ -71,6 +75,24 @@ export class Router {
       const trimmed = content.trim();
       if (trimmed === 'NO_REPLY' || trimmed === 'HEARTBEAT_OK' || trimmed === 'NO') {
         console.log(`[msg] agent=${agentId} channel=${channelId} silent (${trimmed}), not broadcasting`);
+        return;
+      }
+
+      // DM response handler: if channelId is a DM channel, store as direct message and return
+      if (channelId.startsWith('dm-')) {
+        const agent = this.agents.get(agentId);
+        const senderName = agent?.name ?? agentId;
+        console.log(`[dm] agent=${agentId} replied to DM: "${content.slice(0, 120)}${content.length > 120 ? '...' : ''}"`);
+
+        const db = getDb();
+        const dmId = uuid();
+        const timestamp = new Date().toISOString();
+        db.prepare(
+          'INSERT INTO direct_messages (id, from_id, to_id, content, timestamp, read) VALUES (?, ?, ?, ?, ?, 0)'
+        ).run(dmId, agentId, 'user', content, timestamp);
+
+        const message: DirectMessage = { id: dmId, fromId: agentId, toId: 'user', content, timestamp, read: false };
+        this.broadcast({ type: 'dm_message', message });
         return;
       }
 
@@ -1182,6 +1204,12 @@ export class Router {
 
     const message: DirectMessage = { id, fromId, toId, content, timestamp, read: false };
     this.broadcast({ type: 'dm_message', message });
+
+    // Route to agent via gateway if recipient is a registered agent
+    if (this.agents.has(toId) && this.gateway) {
+      console.log(`[dm] routing user DM to agent=${toId} via gateway channel=dm-${toId}`);
+      this.gateway.sendChat(content, `dm-${toId}`, toId);
+    }
   }
 
   private handleListDms(ws: WebSocket, withId: string, limit?: number, before?: string): void {
