@@ -91,8 +91,12 @@ cd web && npm install && cd ..
 cp workshop.json.example workshop.json
 vim workshop.json
 
-# Start everything (with auto-restart)
+# Start both server + web (with auto-restart)
 ./scripts/supervise.sh
+
+# Or start individually (two terminals)
+npm run dev:server   # Terminal 1
+npm run dev:web      # Terminal 2
 ```
 
 Open `http://localhost:5173` in your browser.
