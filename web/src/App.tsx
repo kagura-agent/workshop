@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { AgentList } from './components/AgentList';
@@ -6,7 +6,7 @@ import { CreateChannelDialog } from './components/CreateChannelDialog';
 import { ChannelSettingsPanel } from './components/ChannelSettingsPanel';
 import { CronDashboard } from './components/CronDashboard';
 import { useWebSocket } from './hooks/useWebSocket';
-import type { Channel, Agent, Message, ServerMessage, Pin, PatrolConfig } from './types';
+import type { Channel, Agent, Message, ServerMessage, PatrolConfig } from './types';
 
 const WS_URL = `ws://${window.location.hostname}:3100`;
 
@@ -19,7 +19,6 @@ export default function App() {
   const [editingChannel, setEditingChannel] = useState<boolean>(false);
   const [showChannelSettings, setShowChannelSettings] = useState(false);
   const [showCronDashboard, setShowCronDashboard] = useState(false);
-  const [pins, setPins] = useState<Record<string, Pin[]>>({});
   const [patrolConfig, setPatrolConfigState] = useState<PatrolConfig | null>(null);
 
   const handleMessage = useCallback((msg: ServerMessage) => {
@@ -71,25 +70,6 @@ export default function App() {
       case 'channel_deleted':
         setChannels((prev) => prev.filter((c) => c.id !== msg.channelId));
         setActiveChannelId((prev) => prev === msg.channelId ? null : prev);
-        break;
-      case 'pin_list':
-        setPins((prev) => ({ ...prev, [msg.channelId]: msg.pins }));
-        break;
-      case 'pin_updated':
-        setPins((prev) => {
-          const channelPins = prev[msg.channelId] || [];
-          const idx = channelPins.findIndex((p) => p.id === msg.pin.id);
-          const updated = idx >= 0
-            ? channelPins.map((p, i) => i === idx ? msg.pin : p)
-            : [...channelPins, msg.pin];
-          return { ...prev, [msg.channelId]: updated };
-        });
-        break;
-      case 'pin_deleted':
-        setPins((prev) => {
-          const channelPins = prev[msg.channelId] || [];
-          return { ...prev, [msg.channelId]: channelPins.filter((p) => p.id !== msg.pinId) };
-        });
         break;
       case 'patrol_config':
         setPatrolConfigState(msg.config);
@@ -163,13 +143,6 @@ export default function App() {
     send({ type: 'rename_channel', channelId, name });
   };
 
-  // Request pins when active channel changes
-  useEffect(() => {
-    if (activeChannelId && connected) {
-      send({ type: 'pin_list', channelId: activeChannelId });
-    }
-  }, [activeChannelId, connected, send]);
-
   const selectChannel = (channelId: string) => {
     setActiveChannelId(channelId);
   };
@@ -204,15 +177,11 @@ export default function App() {
           messages={activeChannelId ? (messages[activeChannelId] || []) : []}
           channelAgents={channelAgents}
           typingNames={typingNames}
-          pins={activeChannelId ? (pins[activeChannelId] || []) : []}
           isPatrolChannel={patrolConfig?.controlChannelId === activeChannelId}
           onSendMessage={handleSendMessage}
           onEditChannel={activeChannel ? handleEditChannel : undefined}
           onOpenSettings={activeChannel ? () => setShowChannelSettings(true) : undefined}
           onPatrolTrigger={handlePatrolTrigger}
-          onPinCreate={(channelId, content, label) => send({ type: 'pin_create', channelId, content, label })}
-          onPinMessage={(channelId, messageId) => send({ type: 'pin_message', channelId, messageId })}
-          onPinDelete={(pinId) => send({ type: 'pin_delete', pinId })}
         />
       <AgentList
         agents={agents}

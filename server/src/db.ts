@@ -119,15 +119,6 @@ function initSchema(): void {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE TABLE IF NOT EXISTS pins (
-      id TEXT PRIMARY KEY,
-      channel_id TEXT NOT NULL,
-      type TEXT NOT NULL,
-      source_id TEXT NOT NULL,
-      content TEXT NOT NULL,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (channel_id) REFERENCES channels(id)
-    );
   `);
 
   // v0.3 §4: Patrol config
