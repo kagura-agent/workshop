@@ -214,7 +214,6 @@ export default function App() {
           onPinMessage={(channelId, messageId) => send({ type: 'pin_message', channelId, messageId })}
           onPinDelete={(pinId) => send({ type: 'pin_delete', pinId })}
         />
-      )}
       <AgentList
         agents={agents}
         onRegisterAgent={handleRegisterAgent}
