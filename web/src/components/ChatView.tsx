@@ -45,14 +45,12 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
   const [pinFormContent, setPinFormContent] = useState('');
   const [pinFormLabel, setPinFormLabel] = useState('');
   const [showChannelTodos, setShowChannelTodos] = useState(false);
-  const listRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll on new messages
   useEffect(() => {
-    if (listRef.current) {
-      listRef.current.scrollTop = listRef.current.scrollHeight;
-    }
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   // Filter agents matching mention query
@@ -150,7 +148,7 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
   const agentLastActive = lastAgentMessage ? formatTime(lastAgentMessage.timestamp) : null;
 
   return (
-    <div className="flex-1 flex flex-col bg-muted">
+    <div className="flex-1 flex flex-col bg-muted min-h-0">
       <div className="p-3 px-4 border-b border-border">
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground/60 text-xl">#</span>
@@ -328,8 +326,8 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
           onDelete={onChannelTodoDelete}
         />
       )}
-      <ScrollArea className="flex-1">
-        <div className="p-4" ref={listRef}>
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="p-4">
           {messages.length === 0 && (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
               No messages yet. Say something!
@@ -403,6 +401,7 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
               </div>
             </div>
           ))}
+          <div ref={bottomRef} />
         </div>
       </ScrollArea>
       <form className="p-4" onSubmit={handleSubmit}>
