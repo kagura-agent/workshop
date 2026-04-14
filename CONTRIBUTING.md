@@ -60,7 +60,7 @@ QA (Ren) 的职责：
 2. 在浏览器里实际操作测试功能
 3. 截图关键页面/交互
 4. 截图保存到 `docs/qa-screenshots/` 目录（Git LFS 管理）
-5. 截图通过 `gh pr comment` 贴到 PR comment 里（用 raw URL 引用）
+5. 截图通过 `gh pr comment` 贴到 PR comment 里（LFS 用 `media.githubusercontent.com` URL）
 6. 没有截图 = 没有测试 = 不能 merge
 
 ### 截图流程
@@ -74,8 +74,8 @@ git add docs/qa-screenshots/
 git commit -m "qa: PR #<N> screenshots"
 git push
 
-# 3. 贴 PR comment（用 raw URL）
-gh pr comment <N> --body '![desc](https://github.com/kagura-agent/workshop/blob/<branch>/docs/qa-screenshots/pr<N>-<name>.jpg?raw=true)'
+# 3. 贴 PR comment（LFS 图片用 media URL）
+gh pr comment <N> --body '![desc](https://media.githubusercontent.com/media/kagura-agent/workshop/<branch>/docs/qa-screenshots/pr<N>-<name>.jpg)'
 ```
 
 ### 截图要求
