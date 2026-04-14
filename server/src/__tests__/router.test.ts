@@ -472,10 +472,10 @@ describe('router.ts - Core business logic', () => {
       const db = getDb();
       db.prepare(
         "INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)"
-      ).run('n1', 'test-channel', 'other-channel', 'notif 1', 'todo_change');
+      ).run('n1', 'test-channel', 'other-channel', 'notif 1', 'agent_crosspost');
       db.prepare(
         "INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)"
-      ).run('n2', 'test-channel', 'other-channel', 'notif 2', 'todo_change');
+      ).run('n2', 'test-channel', 'other-channel', 'notif 2', 'agent_crosspost');
 
       ctx.clearSent();
       (ctx.router as any).handleNotificationMarkRead('other-channel');
@@ -502,8 +502,8 @@ describe('router.ts - Core business logic', () => {
       // Seed related data for test-channel
       db.prepare("INSERT INTO messages (id, channel_id, sender_id, sender_name, role, content, timestamp, is_urgent) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 0)").run('msg-1', 'test-channel', 'user', 'You', 'user', 'hello');
       db.prepare("INSERT INTO pins (id, channel_id, type, source_id, content, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))").run('pin-1', 'test-channel', 'custom', 'src', 'pinned');
-      db.prepare("INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)").run('notif-1', 'test-channel', 'other-channel', 'notif', 'todo_change');
-      db.prepare("INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)").run('notif-2', 'other-channel', 'test-channel', 'notif2', 'todo_change');
+      db.prepare("INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)").run('notif-1', 'test-channel', 'other-channel', 'notif', 'agent_crosspost');
+      db.prepare("INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)").run('notif-2', 'other-channel', 'test-channel', 'notif2', 'agent_crosspost');
       db.prepare("INSERT INTO cron_executions (id, channel_id, fired_at, agent_ids, prompt_snippet, status) VALUES (?, ?, datetime('now'), ?, ?, ?)").run('exec-1', 'test-channel', '["agent-1"]', 'snippet', 'sent');
       db.prepare("INSERT INTO north_stars (id, scope, content, updated_at) VALUES (?, ?, ?, datetime('now'))").run('ns-1', 'test-channel', 'goal');
 

@@ -151,7 +151,6 @@ function initSchema(): void {
       target_channel_id TEXT NOT NULL,
       content TEXT NOT NULL,
       trigger_type TEXT NOT NULL,
-      todo_item_id TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       read INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY (source_channel_id) REFERENCES channels(id),

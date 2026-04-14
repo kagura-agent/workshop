@@ -92,7 +92,6 @@ describe('db.ts - Schema initialization', () => {
     expect(colNames).toContain('target_channel_id');
     expect(colNames).toContain('content');
     expect(colNames).toContain('trigger_type');
-    expect(colNames).toContain('todo_item_id');
     expect(colNames).toContain('read');
   });
 });

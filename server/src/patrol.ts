@@ -100,17 +100,6 @@ export function assemblePatrolPrompt(controlChannelId: string, lastPatrolAt: str
     ).get(ch.id) as any;
     const lastActivity = lastMsg?.timestamp ?? 'none';
 
-    // TODO stats for this channel's section
-    let todoSummary = 'No linked section';
-    if (ch.todo_section) {
-      const stats = db.prepare(
-        'SELECT status, COUNT(*) as cnt FROM todo_items WHERE section = ? GROUP BY status'
-      ).all(ch.todo_section) as any[];
-      const m: Record<string, number> = {};
-      for (const s of stats) m[s.status] = s.cnt;
-      todoSummary = `${m.pending ?? 0} pending / ${m.in_progress ?? 0} in progress / ${m.done ?? 0} done`;
-    }
-
     // Last 3 messages
     const recent = db.prepare(
       'SELECT sender_name, content FROM messages WHERE channel_id = ? ORDER BY timestamp DESC LIMIT 3'
@@ -119,32 +108,11 @@ export function assemblePatrolPrompt(controlChannelId: string, lastPatrolAt: str
     parts.push(`### #${ch.name} (${ch.type ?? 'project'})`);
     parts.push(`- Messages since last patrol: ${messageCount}`);
     parts.push(`- Last activity: ${lastActivity}`);
-    parts.push(`- TODO items: ${todoSummary}`);
-
     if (recent.length > 0) {
       parts.push('- Recent:');
       for (const m of recent.reverse()) {
         parts.push(`  [${m.sender_name}]: ${m.content.slice(0, 100)}`);
       }
-    }
-    parts.push('');
-  }
-
-  // Global TODO status
-  const allStats = db.prepare(
-    'SELECT section, status, COUNT(*) as cnt FROM todo_items GROUP BY section, status'
-  ).all() as any[];
-
-  if (allStats.length > 0) {
-    parts.push('## Global TODO Status');
-    const sections = new Map<string, Record<string, number>>();
-    for (const row of allStats as any[]) {
-      if (!sections.has(row.section)) sections.set(row.section, {});
-      sections.get(row.section)![row.status] = row.cnt;
-    }
-    for (const [section, stats] of sections) {
-      const line = Object.entries(stats).map(([s, c]) => `${c} ${s}`).join(', ');
-      parts.push(`- **${section}**: ${line}`);
     }
     parts.push('');
   }

@@ -783,20 +783,19 @@ export class Router {
     sourceChannelId: string,
     targetChannelId: string,
     content: string,
-    trigger: 'todo_change' | 'agent_crosspost' | 'patrol',
-    todoItemId?: string,
+    trigger: 'agent_crosspost' | 'patrol',
   ): void {
     const db = getDb();
     const id = uuid();
     const now = new Date().toISOString();
 
     db.prepare(
-      'INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, todo_item_id, created_at, read) VALUES (?, ?, ?, ?, ?, ?, ?, 0)'
-    ).run(id, sourceChannelId, targetChannelId, content, trigger, todoItemId ?? null, now);
+      'INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, ?, 0)'
+    ).run(id, sourceChannelId, targetChannelId, content, trigger, now);
 
     const notification: Notification = {
       id, sourceChannelId, targetChannelId, content, trigger,
-      todoItemId: todoItemId ?? null, createdAt: now, read: false,
+      createdAt: now, read: false,
     };
 
     this.broadcast({ type: 'notification', notification });

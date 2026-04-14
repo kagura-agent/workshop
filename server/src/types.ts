@@ -153,7 +153,7 @@ export interface PatrolConfig {
   channelFilter: string[];
 }
 
-export type NotificationTrigger = 'todo_change' | 'agent_crosspost' | 'patrol';
+export type NotificationTrigger = 'agent_crosspost' | 'patrol';
 
 export interface Notification {
   id: string;
@@ -161,7 +161,6 @@ export interface Notification {
   targetChannelId: string;
   content: string;
   trigger: NotificationTrigger;
-  todoItemId: string | null;
   createdAt: string;
   read: boolean;
 }
