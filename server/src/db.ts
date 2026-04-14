@@ -91,7 +91,6 @@ function initSchema(): void {
     ['type', "ALTER TABLE channels ADD COLUMN type TEXT NOT NULL DEFAULT 'project'"],
     ['positioning', "ALTER TABLE channels ADD COLUMN positioning TEXT NOT NULL DEFAULT ''"],
     ['guidelines', "ALTER TABLE channels ADD COLUMN guidelines TEXT NOT NULL DEFAULT ''"],
-    ['north_star', "ALTER TABLE channels ADD COLUMN north_star TEXT NOT NULL DEFAULT ''"],
     ['cron_schedule', 'ALTER TABLE channels ADD COLUMN cron_schedule TEXT'],
     ['cron_enabled', 'ALTER TABLE channels ADD COLUMN cron_enabled INTEGER NOT NULL DEFAULT 0'],
   ];
@@ -110,13 +109,6 @@ function initSchema(): void {
       prompt_snippet TEXT,
       status TEXT NOT NULL DEFAULT 'sent',
       FOREIGN KEY (channel_id) REFERENCES channels(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS north_stars (
-      id TEXT PRIMARY KEY,
-      scope TEXT NOT NULL DEFAULT 'global',
-      content TEXT NOT NULL,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
   `);

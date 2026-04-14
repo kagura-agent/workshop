@@ -22,7 +22,6 @@ describe('db.ts - Schema initialization', () => {
     expect(names).toContain('channel_agents');
     expect(names).toContain('messages');
     expect(names).toContain('cron_executions');
-    expect(names).toContain('north_stars');
     expect(names).toContain('patrol_config');
   });
 
@@ -34,7 +33,6 @@ describe('db.ts - Schema initialization', () => {
     expect(colNames).toContain('type');
     expect(colNames).toContain('positioning');
     expect(colNames).toContain('guidelines');
-    expect(colNames).toContain('north_star');
     expect(colNames).toContain('cron_schedule');
     expect(colNames).toContain('cron_enabled');
   });

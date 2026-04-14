@@ -69,7 +69,6 @@ export class ChannelCronManager {
       type: row.type ?? 'project',
       positioning: row.positioning ?? '',
       guidelines: row.guidelines ?? '',
-      northStar: row.north_star ?? '',
       cronSchedule: row.cron_schedule ?? null,
       cronEnabled: !!row.cron_enabled,
     };
@@ -93,7 +92,6 @@ export class ChannelCronManager {
     ];
 
     if (channel.positioning) parts.push(`\nChannel purpose: ${channel.positioning}`);
-    if (channel.northStar) parts.push(`North star: ${channel.northStar}`);
     if (channel.guidelines) parts.push(`\nGuidelines:\n${channel.guidelines}`);
     if (messageContext) parts.push(messageContext);
 
@@ -201,7 +199,6 @@ export class ChannelCronManager {
         type: row.type ?? 'project',
         positioning: row.positioning ?? '',
         guidelines: row.guidelines ?? '',
-        northStar: row.north_star ?? '',
         cronSchedule: row.cron_schedule ?? null,
         cronEnabled: !!row.cron_enabled,
       };

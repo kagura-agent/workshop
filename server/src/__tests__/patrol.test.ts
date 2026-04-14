@@ -8,7 +8,7 @@ describe('patrol.ts - Patrol config', () => {
     // Patrol config requires a channel to exist for the FK
     const db = getDb();
     db.prepare(
-      "INSERT INTO channels (id, name, created_at, type, positioning, guidelines, north_star) VALUES (?, ?, datetime('now'), 'meta', '', '', '')"
+      "INSERT INTO channels (id, name, created_at, type, positioning, guidelines) VALUES (?, ?, datetime('now'), 'meta', '', '')"
     ).run('control-channel', 'Control');
   });
 

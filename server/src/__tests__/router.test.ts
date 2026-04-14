@@ -379,7 +379,6 @@ describe('router.ts - Core business logic', () => {
       // Seed related data for test-channel
       db.prepare("INSERT INTO messages (id, channel_id, sender_id, sender_name, role, content, timestamp, is_urgent) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 0)").run('msg-1', 'test-channel', 'user', 'You', 'user', 'hello');
       db.prepare("INSERT INTO cron_executions (id, channel_id, fired_at, agent_ids, prompt_snippet, status) VALUES (?, ?, datetime('now'), ?, ?, ?)").run('exec-1', 'test-channel', '["agent-1"]', 'snippet', 'sent');
-      db.prepare("INSERT INTO north_stars (id, scope, content, updated_at) VALUES (?, ?, ?, datetime('now'))").run('ns-1', 'test-channel', 'goal');
 
       ctx.clearSent();
       (ctx.router as any).handleDeleteChannel('test-channel');
@@ -391,7 +390,6 @@ describe('router.ts - Core business logic', () => {
       expect(db.prepare('SELECT * FROM channel_agents WHERE channel_id = ?').all('test-channel')).toHaveLength(0);
       expect(db.prepare('SELECT * FROM messages WHERE channel_id = ?').all('test-channel')).toHaveLength(0);
       expect(db.prepare('SELECT * FROM cron_executions WHERE channel_id = ?').all('test-channel')).toHaveLength(0);
-      expect(db.prepare("SELECT * FROM north_stars WHERE scope = 'test-channel'").all()).toHaveLength(0);
 
       // Broadcast
       const deleted = ctx.sentOfType('channel_deleted');

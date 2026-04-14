@@ -10,7 +10,7 @@ interface ChannelSettingsPanelProps {
   patrolConfig: PatrolConfig | null;
   channels: Channel[];
   onClose: () => void;
-  onSave: (metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'northStar' | 'cronSchedule' | 'cronEnabled'>>) => void;
+  onSave: (metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'cronSchedule' | 'cronEnabled'>>) => void;
   onCronTrigger?: (channelId: string) => void;
   cronHistory?: CronExecution[];
   onPatrolConfigSave?: (config: Partial<PatrolConfig>) => void;
@@ -29,7 +29,6 @@ export function ChannelSettingsPanel({ channel, patrolConfig, channels, onClose,
   const [type, setType] = useState<ChannelType>(channel.type);
   const [positioning, setPositioning] = useState(channel.positioning);
   const [guidelines, setGuidelines] = useState(channel.guidelines);
-  const [northStar, setNorthStar] = useState(channel.northStar);
   const [cronSchedule, setCronSchedule] = useState(channel.cronSchedule ?? '');
   const [cronEnabled, setCronEnabled] = useState(channel.cronEnabled);
   const [renameName, setRenameName] = useState(channel.name);
@@ -47,7 +46,6 @@ export function ChannelSettingsPanel({ channel, patrolConfig, channels, onClose,
       type,
       positioning,
       guidelines,
-      northStar,
       cronSchedule: cronSchedule || null,
       cronEnabled,
     });
@@ -103,16 +101,6 @@ export function ChannelSettingsPanel({ channel, patrolConfig, channels, onClose,
               onChange={(e) => setGuidelines(e.target.value)}
               placeholder="Rules and guidelines for agents in this channel"
               className="w-full py-2 px-3 rounded-md bg-muted text-foreground text-sm border border-border resize-none min-h-[80px] placeholder:text-muted-foreground/60 outline-none focus:ring-1 focus:ring-ring"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">North Star</Label>
-            <Input
-              value={northStar}
-              onChange={(e) => setNorthStar(e.target.value)}
-              placeholder="The overarching goal for this channel"
-              className="bg-muted text-sm"
             />
           </div>
 
