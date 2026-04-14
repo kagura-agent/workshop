@@ -112,6 +112,7 @@ export type ServerMessage =
   | { type: 'agent_registered'; agent: Agent }
   | { type: 'agent_updated'; agent: Agent }
   | { type: 'agent_removed'; id: string }
+  | { type: 'dm_typing'; agentId: string; agentName: string }
   | { type: 'dm_message'; message: DirectMessage }
   | { type: 'dm_list'; withId: string; messages: DirectMessage[] }
   | { type: 'dm_conversations'; conversations: DmConversation[] }
