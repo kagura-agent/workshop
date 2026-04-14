@@ -3,7 +3,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { MessageContent } from '@/components/MessageContent';
-import type { Agent, Channel, Message, Pin, Notification } from '../types';
+import type { Agent, Channel, Message, Pin } from '../types';
 
 const TYPE_BADGE: Record<string, { label: string; className: string }> = {
   project: { label: 'Project', className: 'bg-discord-accent/20 text-discord-accent' },
@@ -17,7 +17,6 @@ interface ChatViewProps {
   channelAgents: Agent[];
   typingNames: string[];
   pins: Pin[];
-  notifications: Notification[];
   isPatrolChannel: boolean;
   onSendMessage: (content: string) => void;
   onEditChannel?: () => void;
@@ -28,7 +27,7 @@ interface ChatViewProps {
   onPinDelete?: (pinId: string) => void;
 }
 
-export function ChatView({ channel, messages, channelAgents, typingNames, pins, notifications, isPatrolChannel, onSendMessage, onEditChannel, onOpenSettings, onPatrolTrigger, onPinCreate, onPinMessage, onPinDelete }: ChatViewProps) {
+export function ChatView({ channel, messages, channelAgents, typingNames, pins, isPatrolChannel, onSendMessage, onEditChannel, onOpenSettings, onPatrolTrigger, onPinCreate, onPinMessage, onPinDelete }: ChatViewProps) {
   const [input, setInput] = useState('');
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -343,25 +342,6 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
             </div>
             );
           })}
-          {notifications.filter(n => !n.read).map((notif) => (
-            <div key={notif.id} className="flex gap-3 py-1 mb-2 border-l-2 border-blue-400 pl-2 bg-blue-400/5 rounded-r">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center text-base font-semibold shrink-0 bg-blue-500 text-white">
-                &#8644;
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-baseline gap-2 mb-0.5">
-                  <span className="font-semibold text-sm text-blue-400">Cross-post</span>
-                  <span className="text-[10px] text-muted-foreground">
-                    from #{notif.sourceChannelId}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground">{formatTime(notif.createdAt)}</span>
-                </div>
-                <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">
-                  {notif.content}
-                </div>
-              </div>
-            </div>
-          ))}
           <div ref={bottomRef} />
         </div>
       </ScrollArea>

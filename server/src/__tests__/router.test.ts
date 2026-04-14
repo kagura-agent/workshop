@@ -115,61 +115,6 @@ describe('router.ts - Core business logic', () => {
     });
   });
 
-  // ------- @notify parsing -------
-  describe('@notify parsing', () => {
-    it('extracts cross-post targets from agent messages', () => {
-      (ctx.router as any).clients.add(ctx.mockWs);
-
-      // parseNotifyCommands matches LOWER(name) — use exact channel name (case-insensitive)
-      // Seed data has channel named 'Other Channel' but LOWER(name) lookup won't match 'other-channel'
-      // Create a channel with a simple single-word name for this test
-      const db = getDb();
-      db.prepare(
-        "INSERT INTO channels (id, name, created_at, type, positioning, guidelines, north_star) VALUES (?, ?, datetime('now'), 'project', '', '', '')"
-      ).run('deploy', 'deploy');
-
-      const content = '@notify #deploy: heads up, deploy incoming';
-      (ctx.router as any).parseNotifyCommands('test-channel', content);
-
-      const notifs = db.prepare('SELECT * FROM notifications').all() as any[];
-      expect(notifs).toHaveLength(1);
-      expect(notifs[0].source_channel_id).toBe('test-channel');
-      expect(notifs[0].target_channel_id).toBe('deploy');
-      expect(notifs[0].content).toContain('heads up, deploy incoming');
-      expect(notifs[0].trigger_type).toBe('agent_crosspost');
-    });
-
-    it('ignores @notify to the same source channel', () => {
-      (ctx.router as any).clients.add(ctx.mockWs);
-
-      // Use a name that matches the channel name exactly (case-insensitive)
-      // Seed data has channel 'Test Channel' with id 'test-channel'
-      // But LOWER('Test Channel') = 'test channel' ≠ 'test-channel'
-      // So create a channel whose name matches its slug
-      const db = getDb();
-      db.prepare(
-        "INSERT INTO channels (id, name, created_at, type, positioning, guidelines, north_star) VALUES (?, ?, datetime('now'), 'project', '', '', '')"
-      ).run('selfping', 'selfping');
-
-      const content = '@notify #selfping: self ping';
-      (ctx.router as any).parseNotifyCommands('selfping', content);
-
-      const notifs = db.prepare('SELECT * FROM notifications').all() as any[];
-      expect(notifs).toHaveLength(0);
-    });
-
-    it('ignores @notify to non-existent channels', () => {
-      (ctx.router as any).clients.add(ctx.mockWs);
-
-      const content = '@notify #nonexistent: hello';
-      (ctx.router as any).parseNotifyCommands('test-channel', content);
-
-      const db = getDb();
-      const notifs = db.prepare('SELECT * FROM notifications').all() as any[];
-      expect(notifs).toHaveLength(0);
-    });
-  });
-
   // ------- North Star pin sync -------
   describe('North Star pin sync', () => {
     it('setting a channel-scoped north star auto-creates pin in that channel', () => {
@@ -463,36 +408,6 @@ describe('router.ts - Core business logic', () => {
     });
   });
 
-  // ------- Notification mark read -------
-  describe('Notification mark read', () => {
-    it('marks all unread notifications for a channel as read', () => {
-      (ctx.router as any).clients.add(ctx.mockWs);
-
-      // Create notifications directly
-      const db = getDb();
-      db.prepare(
-        "INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)"
-      ).run('n1', 'test-channel', 'other-channel', 'notif 1', 'agent_crosspost');
-      db.prepare(
-        "INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)"
-      ).run('n2', 'test-channel', 'other-channel', 'notif 2', 'agent_crosspost');
-
-      ctx.clearSent();
-      (ctx.router as any).handleNotificationMarkRead('other-channel');
-
-      const unread = db.prepare("SELECT * FROM notifications WHERE target_channel_id = 'other-channel' AND read = 0").all();
-      expect(unread).toHaveLength(0);
-
-      const allNotifs = db.prepare("SELECT * FROM notifications WHERE target_channel_id = 'other-channel'").all();
-      expect(allNotifs).toHaveLength(2);
-
-      // Should broadcast updated badge
-      const badges = ctx.sentOfType('notification_badge');
-      expect(badges).toHaveLength(1);
-      expect(badges[0].unreadCount).toBe(0);
-    });
-  });
-
   // ------- Channel lifecycle (delete/archive/rename) -------
   describe('Channel lifecycle (delete/archive/rename)', () => {
     it('delete_channel cascades correctly and broadcasts channel_deleted', () => {
@@ -502,8 +417,6 @@ describe('router.ts - Core business logic', () => {
       // Seed related data for test-channel
       db.prepare("INSERT INTO messages (id, channel_id, sender_id, sender_name, role, content, timestamp, is_urgent) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 0)").run('msg-1', 'test-channel', 'user', 'You', 'user', 'hello');
       db.prepare("INSERT INTO pins (id, channel_id, type, source_id, content, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))").run('pin-1', 'test-channel', 'custom', 'src', 'pinned');
-      db.prepare("INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)").run('notif-1', 'test-channel', 'other-channel', 'notif', 'agent_crosspost');
-      db.prepare("INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)").run('notif-2', 'other-channel', 'test-channel', 'notif2', 'agent_crosspost');
       db.prepare("INSERT INTO cron_executions (id, channel_id, fired_at, agent_ids, prompt_snippet, status) VALUES (?, ?, datetime('now'), ?, ?, ?)").run('exec-1', 'test-channel', '["agent-1"]', 'snippet', 'sent');
       db.prepare("INSERT INTO north_stars (id, scope, content, updated_at) VALUES (?, ?, ?, datetime('now'))").run('ns-1', 'test-channel', 'goal');
 
@@ -517,7 +430,6 @@ describe('router.ts - Core business logic', () => {
       expect(db.prepare('SELECT * FROM channel_agents WHERE channel_id = ?').all('test-channel')).toHaveLength(0);
       expect(db.prepare('SELECT * FROM messages WHERE channel_id = ?').all('test-channel')).toHaveLength(0);
       expect(db.prepare('SELECT * FROM pins WHERE channel_id = ?').all('test-channel')).toHaveLength(0);
-      expect(db.prepare("SELECT * FROM notifications WHERE source_channel_id = 'test-channel' OR target_channel_id = 'test-channel'").all()).toHaveLength(0);
       expect(db.prepare('SELECT * FROM cron_executions WHERE channel_id = ?').all('test-channel')).toHaveLength(0);
       expect(db.prepare("SELECT * FROM north_stars WHERE scope = 'test-channel'").all()).toHaveLength(0);
 

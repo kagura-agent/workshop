@@ -25,7 +25,6 @@ describe('db.ts - Schema initialization', () => {
     expect(names).toContain('north_stars');
     expect(names).toContain('pins');
     expect(names).toContain('patrol_config');
-    expect(names).toContain('notifications');
   });
 
   it('channels table has v0.3 migration columns', () => {
@@ -82,16 +81,4 @@ describe('db.ts - Schema initialization', () => {
     expect(colNames).toContain('require_mention');
   });
 
-  it('notifications has all expected columns', () => {
-    const db = getDb();
-    const cols = db.prepare('PRAGMA table_info(notifications)').all() as { name: string }[];
-    const colNames = cols.map((c) => c.name);
-
-    expect(colNames).toContain('id');
-    expect(colNames).toContain('source_channel_id');
-    expect(colNames).toContain('target_channel_id');
-    expect(colNames).toContain('content');
-    expect(colNames).toContain('trigger_type');
-    expect(colNames).toContain('read');
-  });
 });

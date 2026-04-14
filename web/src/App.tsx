@@ -7,7 +7,7 @@ import { CreateChannelDialog } from './components/CreateChannelDialog';
 import { ChannelSettingsPanel } from './components/ChannelSettingsPanel';
 import { CronDashboard } from './components/CronDashboard';
 import { useWebSocket } from './hooks/useWebSocket';
-import type { Channel, Agent, Message, ServerMessage, Pin, PatrolConfig, Notification, DirectMessage, DmConversation } from './types';
+import type { Channel, Agent, Message, ServerMessage, Pin, PatrolConfig, DirectMessage, DmConversation } from './types';
 
 const WS_URL = `ws://${window.location.hostname}:3100`;
 
@@ -24,8 +24,6 @@ export default function App() {
   const [showCronDashboard, setShowCronDashboard] = useState(false);
   const [pins, setPins] = useState<Record<string, Pin[]>>({});
   const [patrolConfig, setPatrolConfigState] = useState<PatrolConfig | null>(null);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [notificationBadges, setNotificationBadges] = useState<Record<string, number>>({});
   const [activeView, setActiveView] = useState<ActiveView | null>(null);
   const [dmMessages, setDmMessages] = useState<Record<string, DirectMessage[]>>({});
   const [dmConversations, setDmConversations] = useState<DmConversation[]>([]);
@@ -106,12 +104,6 @@ export default function App() {
       case 'patrol_fired':
         console.log('[patrol] fired for', msg.controlChannelId);
         break;
-      case 'notification':
-        setNotifications((prev) => [...prev, msg.notification]);
-        break;
-      case 'notification_badge':
-        setNotificationBadges((prev) => ({ ...prev, [msg.channelId]: msg.unreadCount }));
-        break;
       case 'agent_registered':
         setAgents((prev) => [...prev, msg.agent]);
         break;
@@ -185,10 +177,6 @@ export default function App() {
     send({ type: 'patrol_trigger' });
   };
 
-  const handleNotificationMarkRead = (channelId: string) => {
-    send({ type: 'notification_mark_read', channelId });
-  };
-
   const handleRegisterAgent = (agent: { id: string; name: string; avatar?: string }) => {
     send({ type: 'register_agent', agent });
   };
@@ -217,9 +205,6 @@ export default function App() {
   useEffect(() => {
     if (activeChannelId && connected) {
       send({ type: 'pin_list', channelId: activeChannelId });
-      if (notificationBadges[activeChannelId] > 0) {
-        send({ type: 'notification_mark_read', channelId: activeChannelId });
-      }
     }
   }, [activeChannelId, connected, send]);
 
@@ -267,7 +252,6 @@ export default function App() {
         channels={channels}
         agents={agents}
         activeChannelId={activeChannelId}
-        notificationBadges={notificationBadges}
         patrolControlChannelId={patrolConfig?.controlChannelId ?? null}
         onSelectChannel={selectChannel}
         onCreateChannel={handleCreateChannel}
@@ -292,7 +276,6 @@ export default function App() {
           channelAgents={channelAgents}
           typingNames={typingNames}
           pins={activeChannelId ? (pins[activeChannelId] || []) : []}
-          notifications={notifications.filter(n => n.targetChannelId === activeChannelId)}
           isPatrolChannel={patrolConfig?.controlChannelId === activeChannelId}
           onSendMessage={handleSendMessage}
           onEditChannel={activeChannel ? handleEditChannel : undefined}
