@@ -3,6 +3,8 @@
   "version": "0.3.1",
   "private": true,
   "scripts": {
+    "start": "npm run build && (cd server && npm start & cd web && npm run preview & wait)",
+    "dev": "cd server && npm run dev & cd web && npm run dev & wait",
     "test": "cd server && npm test && cd ../web && npm test",
     "dev:server": "cd server && npm run dev",
     "dev:web": "cd web && npm run dev",
