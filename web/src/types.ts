@@ -6,7 +6,6 @@ export interface Agent {
 }
 
 export type ChannelType = 'daily' | 'project' | 'meta';
-export type TodoStatus = 'pending' | 'in_progress' | 'review' | 'done';
 
 export interface Channel {
   id: string;
@@ -20,20 +19,8 @@ export interface Channel {
   positioning: string;
   guidelines: string;
   northStar: string;
-  todoSection: string | null;
   cronSchedule: string | null;
   cronEnabled: boolean;
-}
-
-export interface TodoItem {
-  id: string;
-  section: string;
-  content: string;
-  status: TodoStatus;
-  assignedChannel: string | null;
-  assignedAgent: string | null;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface CronExecution {
@@ -100,10 +87,6 @@ export type ServerMessage =
   | { type: 'channel_created'; channel: Channel }
   | { type: 'channel_updated'; channel: Channel }
   | { type: 'channel_meta_updated'; channel: Channel }
-  | { type: 'todo_list'; items: TodoItem[] }
-  | { type: 'todo_created'; item: TodoItem }
-  | { type: 'todo_updated'; item: TodoItem }
-  | { type: 'todo_deleted'; id: string }
   | { type: 'cron_fired'; channelId: string; execution: CronExecution }
   | { type: 'cron_history'; channelId: string; executions: CronExecution[] }
   | { type: 'north_star'; star: NorthStar }
@@ -123,7 +106,6 @@ export type ServerMessage =
   | { type: 'dm_list'; withId: string; messages: DirectMessage[] }
   | { type: 'dm_conversations'; conversations: DmConversation[] }
   | { type: 'dm_unread'; counts: Record<string, number> }
-  | { type: 'channel_todo_list'; channelId: string; items: TodoItem[] }
   | { type: 'error'; message: string };
 
 // Messages from client → server
@@ -131,13 +113,9 @@ export type ClientMessage =
   | { type: 'send_message'; channelId: string; content: string }
   | { type: 'create_channel'; name: string; agents: { id: string; requireMention: boolean }[] }
   | { type: 'update_channel'; channelId: string; agents: { id: string; requireMention: boolean }[] }
-  | { type: 'update_channel_meta'; channelId: string; metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'northStar' | 'todoSection' | 'cronSchedule' | 'cronEnabled'>> }
+  | { type: 'update_channel_meta'; channelId: string; metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'northStar' | 'cronSchedule' | 'cronEnabled'>> }
   | { type: 'list_channels' }
   | { type: 'list_agents' }
-  | { type: 'todo_list' }
-  | { type: 'todo_create'; section: string; content: string; assignedChannel?: string; assignedAgent?: string }
-  | { type: 'todo_update'; id: string; updates: Partial<Pick<TodoItem, 'content' | 'status' | 'section' | 'assignedChannel' | 'assignedAgent'>> }
-  | { type: 'todo_delete'; id: string }
   | { type: 'cron_trigger'; channelId: string }
   | { type: 'cron_history'; channelId: string }
   | { type: 'north_star_get'; scope?: string }
@@ -159,9 +137,7 @@ export type ClientMessage =
   | { type: 'send_dm'; toId: string; content: string }
   | { type: 'list_dms'; withId: string; limit?: number; before?: string }
   | { type: 'dm_mark_read'; withId: string }
-  | { type: 'dm_conversations' }
-  | { type: 'channel_todo_list'; channelId: string }
-  | { type: 'channel_todo_create'; channelId: string; content: string; status?: TodoStatus };
+  | { type: 'dm_conversations' };
 
 export interface CreateChannelDialogProps {
   agents: Agent[];
