@@ -4,7 +4,7 @@ import { getDb } from './db.js';
 import { GatewayConnection } from './gateway.js';
 import { ChannelCronManager } from './cron.js';
 import { getPatrolConfig, setPatrolConfig } from './patrol.js';
-import type { ClientMessage, ServerMessage, Message, Channel, Agent, CronExecution, NorthStar, Pin, PatrolConfig, DirectMessage, DmConversation } from './types.js';
+import type { ClientMessage, ServerMessage, Message, Channel, Agent, CronExecution, NorthStar, Pin, PatrolConfig } from './types.js';
 
 /**
  * Router — bridges frontend WebSocket clients with a single shared OpenClaw Gateway connection.
@@ -27,7 +27,6 @@ export class Router {
     // Send message history for all active channels
     this.sendAllChannelHistory(ws);
     this.handlePatrolConfigGet(ws);
-    this.sendDmUnread(ws);
 
     ws.on('message', (raw) => {
       try {
@@ -58,11 +57,7 @@ export class Router {
     gw.onTyping = (agentId: string, channelId: string) => {
       const agent = this.agents.get(agentId);
       const agentName = agent?.name ?? agentId;
-      if (channelId.startsWith('dm-')) {
-        this.broadcast({ type: 'dm_typing', agentId, agentName });
-      } else {
-        this.broadcast({ type: 'typing', channelId, agentId, agentName });
-      }
+      this.broadcast({ type: 'typing', channelId, agentId, agentName });
     };
 
     gw.onMessage = (agentId: string, channelId: string, content: string) => {
@@ -72,24 +67,6 @@ export class Router {
       const trimmed = content.trim();
       if (trimmed === 'NO_REPLY' || trimmed === 'HEARTBEAT_OK' || trimmed === 'NO') {
         console.log(`[msg] agent=${agentId} channel=${channelId} silent (${trimmed}), not broadcasting`);
-        return;
-      }
-
-      // DM response handler: if channelId is a DM channel, store as direct message and return
-      if (channelId.startsWith('dm-')) {
-        const agent = this.agents.get(agentId);
-        const senderName = agent?.name ?? agentId;
-        console.log(`[dm] agent=${agentId} replied to DM: "${content.slice(0, 120)}${content.length > 120 ? '...' : ''}"`);
-
-        const db = getDb();
-        const dmId = uuid();
-        const timestamp = new Date().toISOString();
-        db.prepare(
-          'INSERT INTO direct_messages (id, from_id, to_id, content, timestamp, read) VALUES (?, ?, ?, ?, ?, 0)'
-        ).run(dmId, agentId, 'user', content, timestamp);
-
-        const message: DirectMessage = { id: dmId, fromId: agentId, toId: 'user', content, timestamp, read: false };
-        this.broadcast({ type: 'dm_message', message });
         return;
       }
 
@@ -201,18 +178,6 @@ export class Router {
         break;
       case 'rename_channel':
         this.handleRenameChannel(msg.channelId, msg.name);
-        break;
-      case 'send_dm':
-        this.handleSendDm(ws, msg.toId, msg.content);
-        break;
-      case 'list_dms':
-        this.handleListDms(ws, msg.withId, msg.limit, msg.before);
-        break;
-      case 'dm_mark_read':
-        this.handleDmMarkRead(ws, msg.withId);
-        break;
-      case 'dm_conversations':
-        this.handleDmConversations(ws);
         break;
       default:
         this.sendTo(ws, { type: 'error', message: 'Unknown message type' });
@@ -892,127 +857,6 @@ export class Router {
       };
       this.broadcast({ type: 'channel_updated', channel });
     }
-  }
-
-  // --- DM handlers ---
-
-  private handleSendDm(ws: WebSocket, toId: string, content: string): void {
-    const db = getDb();
-    const id = uuid();
-    const timestamp = new Date().toISOString();
-    const fromId = 'user'; // The current user (frontend client)
-
-    db.prepare(
-      'INSERT INTO direct_messages (id, from_id, to_id, content, timestamp, read) VALUES (?, ?, ?, ?, ?, 0)'
-    ).run(id, fromId, toId, content, timestamp);
-
-    const message: DirectMessage = { id, fromId, toId, content, timestamp, read: false };
-    this.broadcast({ type: 'dm_message', message });
-
-    // Route to agent via gateway if recipient is a registered agent
-    if (this.agents.has(toId) && this.gateway) {
-      console.log(`[dm] routing user DM to agent=${toId} via gateway channel=dm-${toId}`);
-      this.gateway.sendChat(content, `dm-${toId}`, toId);
-    }
-  }
-
-  private handleListDms(ws: WebSocket, withId: string, limit?: number, before?: string): void {
-    const db = getDb();
-    const max = limit ?? 100;
-
-    let rows: any[];
-    if (before) {
-      rows = db.prepare(
-        `SELECT * FROM direct_messages
-         WHERE ((from_id = 'user' AND to_id = ?) OR (from_id = ? AND to_id = 'user'))
-           AND timestamp < ?
-         ORDER BY timestamp DESC LIMIT ?`
-      ).all(withId, withId, before, max);
-    } else {
-      rows = db.prepare(
-        `SELECT * FROM direct_messages
-         WHERE (from_id = 'user' AND to_id = ?) OR (from_id = ? AND to_id = 'user')
-         ORDER BY timestamp DESC LIMIT ?`
-      ).all(withId, withId, max);
-    }
-
-    const messages: DirectMessage[] = rows.reverse().map((r: any) => ({
-      id: r.id,
-      fromId: r.from_id,
-      toId: r.to_id,
-      content: r.content,
-      timestamp: r.timestamp,
-      read: !!r.read,
-    }));
-
-    this.sendTo(ws, { type: 'dm_list', withId, messages });
-  }
-
-  private handleDmMarkRead(ws: WebSocket, withId: string): void {
-    const db = getDb();
-    db.prepare(
-      "UPDATE direct_messages SET read = 1 WHERE from_id = ? AND to_id = 'user' AND read = 0"
-    ).run(withId);
-
-    // Send updated unread counts
-    this.sendDmUnread(ws);
-  }
-
-  private handleDmConversations(ws: WebSocket): void {
-    const db = getDb();
-
-    // Find all unique DM partners
-    const rows = db.prepare(`
-      SELECT partner_id, MAX(timestamp) as last_ts FROM (
-        SELECT to_id as partner_id, timestamp FROM direct_messages WHERE from_id = 'user'
-        UNION ALL
-        SELECT from_id as partner_id, timestamp FROM direct_messages WHERE to_id = 'user'
-      ) GROUP BY partner_id ORDER BY last_ts DESC
-    `).all() as any[];
-
-    const conversations: DmConversation[] = rows.map((r: any) => {
-      const partnerId = r.partner_id;
-
-      // Get agent name
-      const agent = db.prepare('SELECT name FROM agents WHERE id = ?').get(partnerId) as any;
-      const partnerName = agent?.name ?? partnerId;
-
-      // Get last message
-      const lastMsg = db.prepare(
-        `SELECT content, timestamp FROM direct_messages
-         WHERE (from_id = 'user' AND to_id = ?) OR (from_id = ? AND to_id = 'user')
-         ORDER BY timestamp DESC LIMIT 1`
-      ).get(partnerId, partnerId) as any;
-
-      // Count unread
-      const unread = db.prepare(
-        "SELECT COUNT(*) as cnt FROM direct_messages WHERE from_id = ? AND to_id = 'user' AND read = 0"
-      ).get(partnerId) as any;
-
-      return {
-        partnerId,
-        partnerName,
-        lastMessage: lastMsg?.content ?? '',
-        lastTimestamp: lastMsg?.timestamp ?? r.last_ts,
-        unreadCount: unread?.cnt ?? 0,
-      };
-    });
-
-    this.sendTo(ws, { type: 'dm_conversations', conversations });
-  }
-
-  private sendDmUnread(ws: WebSocket): void {
-    const db = getDb();
-    const rows = db.prepare(
-      "SELECT from_id, COUNT(*) as cnt FROM direct_messages WHERE to_id = 'user' AND read = 0 GROUP BY from_id"
-    ).all() as any[];
-
-    const counts: Record<string, number> = {};
-    for (const r of rows) {
-      counts[r.from_id] = r.cnt;
-    }
-
-    this.sendTo(ws, { type: 'dm_unread', counts });
   }
 
   private broadcast(msg: ServerMessage): void {

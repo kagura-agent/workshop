@@ -13,12 +13,9 @@ interface SidebarProps {
   onCreateChannel: (name: string, agents: { id: string; requireMention: boolean }[]) => void;
   onOpenSettings: (channelId: string) => void;
   onOpenCronDashboard: () => void;
-  dmUnread: Record<string, number>;
-  activeDmPartnerId: string | null;
-  onSelectDm: (partnerId: string) => void;
 }
 
-export function Sidebar({ channels, agents, activeChannelId, patrolControlChannelId, onSelectChannel, onCreateChannel, onOpenSettings, onOpenCronDashboard, dmUnread, activeDmPartnerId, onSelectDm }: SidebarProps) {
+export function Sidebar({ channels, agents, activeChannelId, patrolControlChannelId, onSelectChannel, onCreateChannel, onOpenSettings, onOpenCronDashboard }: SidebarProps) {
   const [showDialog, setShowDialog] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
 
@@ -111,35 +108,6 @@ export function Sidebar({ channels, agents, activeChannelId, patrolControlChanne
             </div>
           )}
 
-          {/* Direct Messages section */}
-          {agents.length > 0 && (
-            <div className="mt-4">
-              <div className="flex items-center justify-between px-3 pb-2 pt-1">
-                <span className="uppercase tracking-wide text-xs font-semibold text-muted-foreground">Direct Messages</span>
-              </div>
-              {agents.map((agent) => (
-                <div
-                  key={agent.id}
-                  className={cn(
-                    "px-3 py-2 rounded cursor-pointer text-muted-foreground hover:bg-accent hover:text-foreground text-sm flex items-center gap-2",
-                    agent.id === activeDmPartnerId && 'bg-accent text-foreground'
-                  )}
-                  onClick={() => onSelectDm(agent.id)}
-                >
-                  <span className={cn(
-                    'w-2 h-2 rounded-full shrink-0',
-                    agent.status === 'online' ? 'bg-green-500' : agent.status === 'connecting' ? 'bg-yellow-500' : 'bg-muted-foreground/40'
-                  )} />
-                  <span className="flex-1 truncate">{agent.name}</span>
-                  {(dmUnread[agent.id] ?? 0) > 0 && (
-                    <span className="shrink-0 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none px-1">
-                      {dmUnread[agent.id]}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </ScrollArea>
       {showDialog && (
