@@ -5,10 +5,9 @@ import { DmView } from './components/DmView';
 import { AgentList } from './components/AgentList';
 import { CreateChannelDialog } from './components/CreateChannelDialog';
 import { ChannelSettingsPanel } from './components/ChannelSettingsPanel';
-import { TodoPanel } from './components/TodoPanel';
 import { CronDashboard } from './components/CronDashboard';
 import { useWebSocket } from './hooks/useWebSocket';
-import type { Channel, Agent, Message, ServerMessage, TodoItem, NorthStar, Pin, PatrolConfig, Notification, DirectMessage, DmConversation } from './types';
+import type { Channel, Agent, Message, ServerMessage, Pin, PatrolConfig, Notification, DirectMessage, DmConversation } from './types';
 
 const WS_URL = `ws://${window.location.hostname}:3100`;
 
@@ -22,10 +21,7 @@ export default function App() {
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [editingChannel, setEditingChannel] = useState<boolean>(false);
   const [showChannelSettings, setShowChannelSettings] = useState(false);
-  const [showTodoPanel, setShowTodoPanel] = useState(false);
   const [showCronDashboard, setShowCronDashboard] = useState(false);
-  const [todoItems, setTodoItems] = useState<TodoItem[]>([]);
-  const [northStars, setNorthStars] = useState<NorthStar[]>([]);
   const [pins, setPins] = useState<Record<string, Pin[]>>({});
   const [patrolConfig, setPatrolConfigState] = useState<PatrolConfig | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -34,7 +30,6 @@ export default function App() {
   const [dmMessages, setDmMessages] = useState<Record<string, DirectMessage[]>>({});
   const [dmConversations, setDmConversations] = useState<DmConversation[]>([]);
   const [dmUnread, setDmUnread] = useState<Record<string, number>>({});
-  const [channelTodos, setChannelTodos] = useState<Record<string, TodoItem[]>>({});
 
   const handleMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
@@ -85,28 +80,6 @@ export default function App() {
       case 'channel_deleted':
         setChannels((prev) => prev.filter((c) => c.id !== msg.channelId));
         setActiveChannelId((prev) => prev === msg.channelId ? null : prev);
-        break;
-      case 'todo_list':
-        setTodoItems(msg.items);
-        break;
-      case 'todo_created':
-        setTodoItems((prev) => [...prev, msg.item]);
-        break;
-      case 'todo_updated':
-        setTodoItems((prev) => prev.map((t) => t.id === msg.item.id ? msg.item : t));
-        break;
-      case 'todo_deleted':
-        setTodoItems((prev) => prev.filter((t) => t.id !== msg.id));
-        break;
-      case 'north_star':
-        setNorthStars((prev) => {
-          const idx = prev.findIndex((s) => s.scope === msg.star.scope);
-          if (idx >= 0) return prev.map((s, i) => i === idx ? msg.star : s);
-          return [...prev, msg.star];
-        });
-        break;
-      case 'north_star_list':
-        setNorthStars(msg.stars);
         break;
       case 'pin_list':
         setPins((prev) => ({ ...prev, [msg.channelId]: msg.pins }));
@@ -163,9 +136,6 @@ export default function App() {
       case 'dm_unread':
         setDmUnread(msg.counts);
         break;
-      case 'channel_todo_list':
-        setChannelTodos((prev) => ({ ...prev, [msg.channelId]: msg.items }));
-        break;
       case 'error':
         console.error('[workshop]', msg.message);
         break;
@@ -203,12 +173,8 @@ export default function App() {
     send({ type: 'update_channel', channelId, agents: agentConfigs });
   };
 
-  const handleUpdateChannelMeta = (channelId: string, metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'northStar' | 'todoSection' | 'cronSchedule' | 'cronEnabled'>>) => {
+  const handleUpdateChannelMeta = (channelId: string, metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'northStar' | 'cronSchedule' | 'cronEnabled'>>) => {
     send({ type: 'update_channel_meta', channelId, metadata });
-  };
-
-  const handleSetNorthStar = (scope: string, content: string) => {
-    send({ type: 'north_star_set', scope, content });
   };
 
   const handlePatrolConfigSet = (config: Partial<PatrolConfig>) => {
@@ -331,27 +297,10 @@ export default function App() {
           onSendMessage={handleSendMessage}
           onEditChannel={activeChannel ? handleEditChannel : undefined}
           onOpenSettings={activeChannel ? () => setShowChannelSettings(true) : undefined}
-          onToggleTodo={() => setShowTodoPanel((v) => !v)}
           onPatrolTrigger={handlePatrolTrigger}
           onPinCreate={(channelId, content, label) => send({ type: 'pin_create', channelId, content, label })}
           onPinMessage={(channelId, messageId) => send({ type: 'pin_message', channelId, messageId })}
           onPinDelete={(pinId) => send({ type: 'pin_delete', pinId })}
-          channelTodoItems={activeChannelId ? (channelTodos[activeChannelId] || []) : []}
-          onChannelTodoCreate={(channelId, content, status) => send({ type: 'channel_todo_create', channelId, content, status })}
-          onChannelTodoUpdate={(id, updates) => send({ type: 'todo_update', id, updates })}
-          onChannelTodoDelete={(id) => send({ type: 'todo_delete', id })}
-          onChannelTodoRefresh={(channelId) => send({ type: 'channel_todo_list', channelId })}
-        />
-      )}
-      {showTodoPanel && (
-        <TodoPanel
-          items={todoItems}
-          northStars={northStars}
-          onClose={() => setShowTodoPanel(false)}
-          onCreate={(section, content) => send({ type: 'todo_create', section, content })}
-          onUpdate={(id, updates) => send({ type: 'todo_update', id, updates })}
-          onDelete={(id) => send({ type: 'todo_delete', id })}
-          onSetNorthStar={handleSetNorthStar}
         />
       )}
       <AgentList

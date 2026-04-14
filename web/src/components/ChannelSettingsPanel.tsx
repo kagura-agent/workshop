@@ -10,7 +10,7 @@ interface ChannelSettingsPanelProps {
   patrolConfig: PatrolConfig | null;
   channels: Channel[];
   onClose: () => void;
-  onSave: (metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'northStar' | 'todoSection' | 'cronSchedule' | 'cronEnabled'>>) => void;
+  onSave: (metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'northStar' | 'cronSchedule' | 'cronEnabled'>>) => void;
   onCronTrigger?: (channelId: string) => void;
   cronHistory?: CronExecution[];
   onPatrolConfigSave?: (config: Partial<PatrolConfig>) => void;
@@ -30,7 +30,6 @@ export function ChannelSettingsPanel({ channel, patrolConfig, channels, onClose,
   const [positioning, setPositioning] = useState(channel.positioning);
   const [guidelines, setGuidelines] = useState(channel.guidelines);
   const [northStar, setNorthStar] = useState(channel.northStar);
-  const [todoSection, setTodoSection] = useState(channel.todoSection ?? '');
   const [cronSchedule, setCronSchedule] = useState(channel.cronSchedule ?? '');
   const [cronEnabled, setCronEnabled] = useState(channel.cronEnabled);
   const [renameName, setRenameName] = useState(channel.name);
@@ -49,7 +48,6 @@ export function ChannelSettingsPanel({ channel, patrolConfig, channels, onClose,
       positioning,
       guidelines,
       northStar,
-      todoSection: todoSection || null,
       cronSchedule: cronSchedule || null,
       cronEnabled,
     });
@@ -114,16 +112,6 @@ export function ChannelSettingsPanel({ channel, patrolConfig, channels, onClose,
               value={northStar}
               onChange={(e) => setNorthStar(e.target.value)}
               placeholder="The overarching goal for this channel"
-              className="bg-muted text-sm"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Todo Section</Label>
-            <Input
-              value={todoSection}
-              onChange={(e) => setTodoSection(e.target.value)}
-              placeholder="Section name for todo items"
               className="bg-muted text-sm"
             />
           </div>

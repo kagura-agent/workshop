@@ -1,0 +1,4 @@
+# QA screenshots via Git LFS
+docs/qa-screenshots/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+docs/qa-screenshots/**/*.jpeg filter=lfs diff=lfs merge=lfs -text
+docs/qa-screenshots/**/*.png filter=lfs diff=lfs merge=lfs -text

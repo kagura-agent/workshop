@@ -3,8 +3,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { MessageContent } from '@/components/MessageContent';
-import type { Agent, Channel, Message, Pin, Notification, TodoItem, TodoStatus } from '../types';
-import { ChannelTodoPanel } from '@/components/ChannelTodoPanel';
+import type { Agent, Channel, Message, Pin, Notification } from '../types';
 
 const TYPE_BADGE: Record<string, { label: string; className: string }> = {
   project: { label: 'Project', className: 'bg-discord-accent/20 text-discord-accent' },
@@ -23,19 +22,13 @@ interface ChatViewProps {
   onSendMessage: (content: string) => void;
   onEditChannel?: () => void;
   onOpenSettings?: () => void;
-  onToggleTodo?: () => void;
   onPatrolTrigger?: () => void;
   onPinCreate?: (channelId: string, content: string, label?: string) => void;
   onPinMessage?: (channelId: string, messageId: string) => void;
   onPinDelete?: (pinId: string) => void;
-  channelTodoItems?: TodoItem[];
-  onChannelTodoCreate?: (channelId: string, content: string, status?: TodoStatus) => void;
-  onChannelTodoUpdate?: (id: string, updates: Partial<Pick<TodoItem, 'content' | 'status' | 'section' | 'assignedChannel' | 'assignedAgent'>>) => void;
-  onChannelTodoDelete?: (id: string) => void;
-  onChannelTodoRefresh?: (channelId: string) => void;
 }
 
-export function ChatView({ channel, messages, channelAgents, typingNames, pins, notifications, isPatrolChannel, onSendMessage, onEditChannel, onOpenSettings, onToggleTodo, onPatrolTrigger, onPinCreate, onPinMessage, onPinDelete, channelTodoItems, onChannelTodoCreate, onChannelTodoUpdate, onChannelTodoDelete, onChannelTodoRefresh }: ChatViewProps) {
+export function ChatView({ channel, messages, channelAgents, typingNames, pins, notifications, isPatrolChannel, onSendMessage, onEditChannel, onOpenSettings, onPatrolTrigger, onPinCreate, onPinMessage, onPinDelete }: ChatViewProps) {
   const [input, setInput] = useState('');
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -44,7 +37,6 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
   const [showPinForm, setShowPinForm] = useState(false);
   const [pinFormContent, setPinFormContent] = useState('');
   const [pinFormLabel, setPinFormLabel] = useState('');
-  const [showChannelTodos, setShowChannelTodos] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -174,27 +166,6 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
                 &#128737;
               </button>
             )}
-            {onToggleTodo && (
-              <button
-                className="cursor-pointer text-muted-foreground hover:text-foreground text-sm px-1.5"
-                onClick={onToggleTodo}
-                title="Toggle TODO panel"
-              >
-                &#9745;
-              </button>
-            )}
-            {onChannelTodoCreate && (
-              <button
-                className={cn(
-                  'cursor-pointer text-sm px-1.5',
-                  showChannelTodos ? 'text-blue-400 hover:text-blue-300' : 'text-muted-foreground hover:text-foreground'
-                )}
-                onClick={() => setShowChannelTodos((v) => !v)}
-                title="Toggle channel tasks"
-              >
-                &#9744;
-              </button>
-            )}
             {onOpenSettings && (
               <button
                 className="cursor-pointer text-muted-foreground hover:text-foreground"
@@ -315,16 +286,6 @@ export function ChatView({ channel, messages, channelAgents, typingNames, pins, 
             );
           })()}
         </div>
-      )}
-      {showChannelTodos && channel && onChannelTodoCreate && onChannelTodoUpdate && onChannelTodoDelete && (
-        <ChannelTodoPanel
-          channelId={channel.id}
-          items={channelTodoItems || []}
-          onClose={() => setShowChannelTodos(false)}
-          onCreate={onChannelTodoCreate}
-          onUpdate={onChannelTodoUpdate}
-          onDelete={onChannelTodoDelete}
-        />
       )}
       <ScrollArea className="flex-1 min-h-0">
         <div className="p-4">

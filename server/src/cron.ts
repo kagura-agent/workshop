@@ -70,25 +70,9 @@ export class ChannelCronManager {
       positioning: row.positioning ?? '',
       guidelines: row.guidelines ?? '',
       northStar: row.north_star ?? '',
-      todoSection: row.todo_section ?? null,
       cronSchedule: row.cron_schedule ?? null,
       cronEnabled: !!row.cron_enabled,
     };
-
-    // Load TODO items matching todoSection
-    let todoContext = '';
-    if (channel.todoSection) {
-      const todos = db.prepare(
-        "SELECT * FROM todo_items WHERE section = ? AND status != 'done' ORDER BY created_at ASC"
-      ).all(channel.todoSection) as any[];
-
-      if (todos.length > 0) {
-        const todoLines = todos.map(
-          (t: any) => `- [${t.status}] ${t.content}`
-        );
-        todoContext = `\n\n## Active TODO items (section: ${channel.todoSection})\n${todoLines.join('\n')}`;
-      }
-    }
 
     // Load last 10 messages
     const recentMessages = db.prepare(
@@ -111,7 +95,6 @@ export class ChannelCronManager {
     if (channel.positioning) parts.push(`\nChannel purpose: ${channel.positioning}`);
     if (channel.northStar) parts.push(`North star: ${channel.northStar}`);
     if (channel.guidelines) parts.push(`\nGuidelines:\n${channel.guidelines}`);
-    if (todoContext) parts.push(todoContext);
     if (messageContext) parts.push(messageContext);
 
     parts.push('\n\nPlease review the above context and provide your update or take action as appropriate.');
@@ -219,7 +202,6 @@ export class ChannelCronManager {
         positioning: row.positioning ?? '',
         guidelines: row.guidelines ?? '',
         northStar: row.north_star ?? '',
-        todoSection: row.todo_section ?? null,
         cronSchedule: row.cron_schedule ?? null,
         cronEnabled: !!row.cron_enabled,
       };

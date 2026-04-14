@@ -170,111 +170,6 @@ describe('router.ts - Core business logic', () => {
     });
   });
 
-  // ------- TODO CRUD -------
-  describe('TODO CRUD', () => {
-    it('creates a todo item', () => {
-      (ctx.router as any).clients.add(ctx.mockWs);
-      (ctx.router as any).handleTodoCreate('backlog', 'write tests');
-
-      const db = getDb();
-      const items = db.prepare('SELECT * FROM todo_items').all() as any[];
-      expect(items).toHaveLength(1);
-      expect(items[0].section).toBe('backlog');
-      expect(items[0].content).toBe('write tests');
-      expect(items[0].status).toBe('pending');
-    });
-
-    it('creates a todo with assigned channel and agent', () => {
-      (ctx.router as any).clients.add(ctx.mockWs);
-      (ctx.router as any).handleTodoCreate('backlog', 'assigned task', 'test-channel', 'agent-1');
-
-      const db = getDb();
-      const item = db.prepare('SELECT * FROM todo_items').get() as any;
-      expect(item.assigned_channel).toBe('test-channel');
-      expect(item.assigned_agent).toBe('agent-1');
-    });
-
-    it('broadcasts todo_created on create', () => {
-      (ctx.router as any).clients.add(ctx.mockWs);
-      (ctx.router as any).handleTodoCreate('backlog', 'new task');
-
-      const created = ctx.sentOfType('todo_created');
-      expect(created).toHaveLength(1);
-      expect(created[0].item.content).toBe('new task');
-      expect(created[0].item.status).toBe('pending');
-    });
-
-    it('updates a todo status with audit trail', () => {
-      (ctx.router as any).clients.add(ctx.mockWs);
-      (ctx.router as any).handleTodoCreate('backlog', 'task to update');
-
-      const db = getDb();
-      const item = db.prepare('SELECT * FROM todo_items').get() as any;
-
-      ctx.clearSent();
-      (ctx.router as any).handleTodoUpdate(item.id, { status: 'in_progress' });
-
-      const updated = db.prepare('SELECT * FROM todo_items WHERE id = ?').get(item.id) as any;
-      expect(updated.status).toBe('in_progress');
-
-      // Audit trail
-      const history = db.prepare('SELECT * FROM todo_history WHERE todo_id = ?').all(item.id) as any[];
-      expect(history).toHaveLength(1);
-      expect(history[0].field).toBe('status');
-      expect(history[0].old_value).toBe('pending');
-      expect(history[0].new_value).toBe('in_progress');
-    });
-
-    it('deletes a todo and its history', () => {
-      (ctx.router as any).clients.add(ctx.mockWs);
-      (ctx.router as any).handleTodoCreate('backlog', 'to delete');
-
-      const db = getDb();
-      const item = db.prepare('SELECT * FROM todo_items').get() as any;
-
-      // First update to create history
-      (ctx.router as any).handleTodoUpdate(item.id, { status: 'done' });
-
-      ctx.clearSent();
-      (ctx.router as any).handleTodoDelete(item.id);
-
-      const items = db.prepare('SELECT * FROM todo_items').all();
-      expect(items).toHaveLength(0);
-      const history = db.prepare('SELECT * FROM todo_history WHERE todo_id = ?').all(item.id);
-      expect(history).toHaveLength(0);
-
-      const deleted = ctx.sentOfType('todo_deleted');
-      expect(deleted).toHaveLength(1);
-      expect(deleted[0].id).toBe(item.id);
-    });
-  });
-
-  // ------- TODO pin sync -------
-  describe('TODO pin sync', () => {
-    it('updating a todo triggers pin update for linked channels', () => {
-      (ctx.router as any).clients.add(ctx.mockWs);
-
-      // Create a todo in the 'backlog' section (test-channel has todoSection='backlog')
-      (ctx.router as any).handleTodoCreate('backlog', 'first task');
-      (ctx.router as any).handleTodoCreate('backlog', 'second task');
-
-      ctx.clearSent();
-
-      const db = getDb();
-      const item = db.prepare('SELECT * FROM todo_items LIMIT 1').get() as any;
-      (ctx.router as any).handleTodoUpdate(item.id, { status: 'in_progress' });
-
-      // Check that pins were created/updated for channels with todoSection = 'backlog'
-      const pins = db.prepare("SELECT * FROM pins WHERE type = 'todo_section' AND source_id = 'backlog'").all() as any[];
-      expect(pins.length).toBeGreaterThanOrEqual(1);
-
-      // Pin content should reflect current todo state
-      const pin = pins[0];
-      expect(pin.content).toContain('first task');
-      expect(pin.content).toContain('second task');
-    });
-  });
-
   // ------- North Star pin sync -------
   describe('North Star pin sync', () => {
     it('setting a channel-scoped north star auto-creates pin in that channel', () => {
@@ -446,29 +341,6 @@ describe('router.ts - Core business logic', () => {
     });
   });
 
-  // ------- Notification on TODO status change -------
-  describe('Notifications on TODO status change', () => {
-    it('creates notification when todo status changes for linked channels', () => {
-      (ctx.router as any).clients.add(ctx.mockWs);
-
-      // Both test-channel and other-channel share todoSection='backlog'
-      (ctx.router as any).handleTodoCreate('backlog', 'cross-channel task', 'test-channel');
-
-      const db = getDb();
-      const item = db.prepare('SELECT * FROM todo_items').get() as any;
-
-      ctx.clearSent();
-      (ctx.router as any).handleTodoUpdate(item.id, { status: 'in_progress' });
-
-      // Should notify other-channel about the status change
-      const notifs = db.prepare('SELECT * FROM notifications WHERE trigger_type = ?').all('todo_change') as any[];
-      expect(notifs).toHaveLength(1);
-      expect(notifs[0].target_channel_id).toBe('other-channel');
-      expect(notifs[0].content).toContain('pending');
-      expect(notifs[0].content).toContain('in_progress');
-    });
-  });
-
   // ------- Protocol token filtering -------
   describe('Protocol token filtering', () => {
     it('NO_REPLY is not broadcast', () => {
@@ -600,10 +472,10 @@ describe('router.ts - Core business logic', () => {
       const db = getDb();
       db.prepare(
         "INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)"
-      ).run('n1', 'test-channel', 'other-channel', 'notif 1', 'todo_change');
+      ).run('n1', 'test-channel', 'other-channel', 'notif 1', 'agent_crosspost');
       db.prepare(
         "INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)"
-      ).run('n2', 'test-channel', 'other-channel', 'notif 2', 'todo_change');
+      ).run('n2', 'test-channel', 'other-channel', 'notif 2', 'agent_crosspost');
 
       ctx.clearSent();
       (ctx.router as any).handleNotificationMarkRead('other-channel');
@@ -630,11 +502,10 @@ describe('router.ts - Core business logic', () => {
       // Seed related data for test-channel
       db.prepare("INSERT INTO messages (id, channel_id, sender_id, sender_name, role, content, timestamp, is_urgent) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 0)").run('msg-1', 'test-channel', 'user', 'You', 'user', 'hello');
       db.prepare("INSERT INTO pins (id, channel_id, type, source_id, content, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))").run('pin-1', 'test-channel', 'custom', 'src', 'pinned');
-      db.prepare("INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)").run('notif-1', 'test-channel', 'other-channel', 'notif', 'todo_change');
-      db.prepare("INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)").run('notif-2', 'other-channel', 'test-channel', 'notif2', 'todo_change');
+      db.prepare("INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)").run('notif-1', 'test-channel', 'other-channel', 'notif', 'agent_crosspost');
+      db.prepare("INSERT INTO notifications (id, source_channel_id, target_channel_id, content, trigger_type, created_at, read) VALUES (?, ?, ?, ?, ?, datetime('now'), 0)").run('notif-2', 'other-channel', 'test-channel', 'notif2', 'agent_crosspost');
       db.prepare("INSERT INTO cron_executions (id, channel_id, fired_at, agent_ids, prompt_snippet, status) VALUES (?, ?, datetime('now'), ?, ?, ?)").run('exec-1', 'test-channel', '["agent-1"]', 'snippet', 'sent');
       db.prepare("INSERT INTO north_stars (id, scope, content, updated_at) VALUES (?, ?, ?, datetime('now'))").run('ns-1', 'test-channel', 'goal');
-      db.prepare("INSERT INTO todo_items (id, section, content, status, assigned_channel, assigned_agent, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))").run('todo-1', 'backlog', 'task', 'pending', 'test-channel', null);
 
       ctx.clearSent();
       (ctx.router as any).handleDeleteChannel('test-channel');
@@ -649,11 +520,6 @@ describe('router.ts - Core business logic', () => {
       expect(db.prepare("SELECT * FROM notifications WHERE source_channel_id = 'test-channel' OR target_channel_id = 'test-channel'").all()).toHaveLength(0);
       expect(db.prepare('SELECT * FROM cron_executions WHERE channel_id = ?').all('test-channel')).toHaveLength(0);
       expect(db.prepare("SELECT * FROM north_stars WHERE scope = 'test-channel'").all()).toHaveLength(0);
-
-      // Todo assignment cleared but todo still exists
-      const todo = db.prepare('SELECT * FROM todo_items WHERE id = ?').get('todo-1') as any;
-      expect(todo).toBeTruthy();
-      expect(todo.assigned_channel).toBeNull();
 
       // Broadcast
       const deleted = ctx.sentOfType('channel_deleted');
@@ -745,70 +611,4 @@ describe('router.ts - Core business logic', () => {
     });
   });
 
-  // ------- Channel TODO (per-channel) -------
-  describe('Channel TODO (per-channel)', () => {
-    it('channel_todo_list returns only items for that channel', () => {
-      (ctx.router as any).clients.add(ctx.mockWs);
-
-      // Create items: one assigned to test-channel, one to other-channel, one global
-      (ctx.router as any).handleTodoCreate('backlog', 'task for test', 'test-channel');
-      (ctx.router as any).handleTodoCreate('backlog', 'task for other', 'other-channel');
-      (ctx.router as any).handleTodoCreate('backlog', 'global task');
-
-      ctx.clearSent();
-      (ctx.router as any).handleChannelTodoList(ctx.mockWs, 'test-channel');
-
-      const lists = ctx.sentOfType('channel_todo_list');
-      expect(lists).toHaveLength(1);
-      expect(lists[0].channelId).toBe('test-channel');
-      expect(lists[0].items).toHaveLength(1);
-      expect(lists[0].items[0].content).toBe('task for test');
-    });
-
-    it('channel_todo_create creates item with correct assigned_channel and section', () => {
-      (ctx.router as any).clients.add(ctx.mockWs);
-
-      (ctx.router as any).handleChannelTodoCreate('test-channel', 'channel task');
-
-      const db = getDb();
-      const items = db.prepare('SELECT * FROM todo_items WHERE assigned_channel = ?').all('test-channel') as any[];
-      expect(items).toHaveLength(1);
-      expect(items[0].content).toBe('channel task');
-      expect(items[0].assigned_channel).toBe('test-channel');
-      expect(items[0].section).toBe('Test Channel'); // defaults to channel name
-      expect(items[0].status).toBe('pending');
-    });
-
-    it('channel_todo_create broadcasts todo_created and channel_todo_list', () => {
-      (ctx.router as any).clients.add(ctx.mockWs);
-
-      ctx.clearSent();
-      (ctx.router as any).handleChannelTodoCreate('test-channel', 'new channel task');
-
-      const created = ctx.sentOfType('todo_created');
-      expect(created).toHaveLength(1);
-      expect(created[0].item.content).toBe('new channel task');
-      expect(created[0].item.assignedChannel).toBe('test-channel');
-
-      const lists = ctx.sentOfType('channel_todo_list');
-      expect(lists).toHaveLength(1);
-      expect(lists[0].channelId).toBe('test-channel');
-      expect(lists[0].items).toHaveLength(1);
-    });
-
-    it('global todo_list still returns all items', () => {
-      (ctx.router as any).clients.add(ctx.mockWs);
-
-      // Create channel-specific and global items
-      (ctx.router as any).handleChannelTodoCreate('test-channel', 'channel task');
-      (ctx.router as any).handleTodoCreate('backlog', 'global task');
-
-      ctx.clearSent();
-      (ctx.router as any).handleTodoList(ctx.mockWs);
-
-      const lists = ctx.sentOfType('todo_list');
-      expect(lists).toHaveLength(1);
-      expect(lists[0].items).toHaveLength(2);
-    });
-  });
 });
