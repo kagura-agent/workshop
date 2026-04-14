@@ -4,7 +4,7 @@ import { getDb } from './db.js';
 import { GatewayConnection } from './gateway.js';
 import { ChannelCronManager } from './cron.js';
 import { getPatrolConfig, setPatrolConfig } from './patrol.js';
-import type { ClientMessage, ServerMessage, Message, Channel, Agent, CronExecution, PatrolConfig } from './types.js';
+import type { ClientMessage, ServerMessage, Message, Channel, Agent, PatrolConfig } from './types.js';
 
 /**
  * Router — bridges frontend WebSocket clients with a single shared OpenClaw Gateway connection.
@@ -126,12 +126,6 @@ export class Router {
         break;
       case 'update_channel_meta':
         this.handleUpdateChannelMeta(msg.channelId, msg.metadata);
-        break;
-      case 'cron_trigger':
-        this.handleCronTrigger(ws, msg.channelId);
-        break;
-      case 'cron_history':
-        this.handleCronHistory(ws, msg.channelId);
         break;
       case 'patrol_config_get':
         this.handlePatrolConfigGet(ws);
@@ -486,33 +480,6 @@ export class Router {
     if (this.cronManager && (metadata.cronSchedule !== undefined || metadata.cronEnabled !== undefined)) {
       this.cronManager.syncChannel(channel);
     }
-  }
-
-  // --- Cron handlers ---
-
-  private handleCronTrigger(ws: WebSocket, channelId: string): void {
-    if (!this.cronManager) {
-      this.sendTo(ws, { type: 'error', message: 'Cron manager not initialized' });
-      return;
-    }
-
-    this.cronManager.triggerChannel(channelId);
-
-    // Return the latest execution
-    const executions = this.cronManager.getHistory(channelId, 1);
-    if (executions.length > 0) {
-      this.broadcast({ type: 'cron_fired', channelId, execution: executions[0] });
-    }
-  }
-
-  private handleCronHistory(ws: WebSocket, channelId: string): void {
-    if (!this.cronManager) {
-      this.sendTo(ws, { type: 'cron_history', channelId, executions: [] });
-      return;
-    }
-
-    const executions = this.cronManager.getHistory(channelId);
-    this.sendTo(ws, { type: 'cron_history', channelId, executions });
   }
 
   private sendAllChannelHistory(ws: WebSocket): void {

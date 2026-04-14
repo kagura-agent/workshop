@@ -3,7 +3,7 @@ import type { ScheduledTask } from 'node-cron';
 import { v4 as uuid } from 'uuid';
 import { getDb } from './db.js';
 import { getPatrolConfig, assemblePatrolPrompt, markPatrolFired } from './patrol.js';
-import type { Channel, Agent, CronExecution, PatrolConfig } from './types.js';
+import type { Channel, Agent, PatrolConfig } from './types.js';
 
 export type SendChatFn = (content: string, channelId: string, agentId: string) => void;
 
@@ -128,29 +128,6 @@ export class ChannelCronManager {
     ).run(executionId, channelId, now, JSON.stringify(agentIds), prompt.slice(0, 500), 'sent');
 
     console.log(`[cron] logged execution=${executionId} channel=${channelId}`);
-  }
-
-  /** Manually trigger a cron execution for a channel. */
-  triggerChannel(channelId: string): void {
-    console.log(`[cron] manual trigger for channel=${channelId}`);
-    this.executeCron(channelId);
-  }
-
-  /** Get execution history for a channel. */
-  getHistory(channelId: string, limit = 20): CronExecution[] {
-    const db = getDb();
-    const rows = db.prepare(
-      'SELECT * FROM cron_executions WHERE channel_id = ? ORDER BY fired_at DESC LIMIT ?'
-    ).all(channelId, limit) as any[];
-
-    return rows.map((r: any) => ({
-      id: r.id,
-      channelId: r.channel_id,
-      firedAt: r.fired_at,
-      agentIds: JSON.parse(r.agent_ids),
-      promptSnippet: r.prompt_snippet,
-      status: r.status,
-    }));
   }
 
   /** Stop and remove the cron task for a specific channel. */

@@ -4,7 +4,6 @@ import { ChatView } from './components/ChatView';
 import { AgentList } from './components/AgentList';
 import { CreateChannelDialog } from './components/CreateChannelDialog';
 import { ChannelSettingsPanel } from './components/ChannelSettingsPanel';
-import { CronDashboard } from './components/CronDashboard';
 import { useWebSocket } from './hooks/useWebSocket';
 import type { Channel, Agent, Message, ServerMessage, PatrolConfig } from './types';
 
@@ -18,7 +17,6 @@ export default function App() {
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [editingChannel, setEditingChannel] = useState<boolean>(false);
   const [showChannelSettings, setShowChannelSettings] = useState(false);
-  const [showCronDashboard, setShowCronDashboard] = useState(false);
   const [patrolConfig, setPatrolConfigState] = useState<PatrolConfig | null>(null);
 
   const handleMessage = useCallback((msg: ServerMessage) => {
@@ -170,7 +168,6 @@ export default function App() {
         onSelectChannel={selectChannel}
         onCreateChannel={handleCreateChannel}
         onOpenSettings={(channelId) => { selectChannel(channelId); setShowChannelSettings(true); }}
-        onOpenCronDashboard={() => setShowCronDashboard(true)}
       />
       <ChatView
           channel={activeChannel ?? null}
@@ -218,13 +215,6 @@ export default function App() {
           onDeleteChannel={handleDeleteChannel}
           onArchiveChannel={handleArchiveChannel}
           onRenameChannel={handleRenameChannel}
-        />
-      )}
-      {showCronDashboard && (
-        <CronDashboard
-          channels={channels}
-          onTrigger={(channelId) => send({ type: 'cron_trigger', channelId })}
-          onClose={() => setShowCronDashboard(false)}
         />
       )}
       {status === 'reconnecting' && (

@@ -22,15 +22,6 @@ export interface Channel {
   cronEnabled: boolean;
 }
 
-export interface CronExecution {
-  id: string;
-  channelId: string;
-  firedAt: string;
-  agentIds: string[];
-  promptSnippet: string;
-  status: string;
-}
-
 export interface Message {
   id: string;
   channelId: string;
@@ -51,8 +42,6 @@ export type ServerMessage =
   | { type: 'channel_created'; channel: Channel }
   | { type: 'channel_updated'; channel: Channel }
   | { type: 'channel_meta_updated'; channel: Channel }
-  | { type: 'cron_fired'; channelId: string; execution: CronExecution }
-  | { type: 'cron_history'; channelId: string; executions: CronExecution[] }
   | { type: 'patrol_config'; config: PatrolConfig | null }
   | { type: 'patrol_fired'; controlChannelId: string }
   | { type: 'channel_deleted'; channelId: string }
@@ -69,8 +58,6 @@ export type ClientMessage =
   | { type: 'update_channel_meta'; channelId: string; metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'cronSchedule' | 'cronEnabled'>> }
   | { type: 'list_channels' }
   | { type: 'list_agents' }
-  | { type: 'cron_trigger'; channelId: string }
-  | { type: 'cron_history'; channelId: string }
   | { type: 'patrol_config_get' }
   | { type: 'patrol_config_set'; config: Partial<PatrolConfig> }
   | { type: 'patrol_trigger' }
