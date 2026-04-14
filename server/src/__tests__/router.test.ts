@@ -115,44 +115,6 @@ describe('router.ts - Core business logic', () => {
     });
   });
 
-  // ------- North Star pin sync -------
-  describe('North Star pin sync', () => {
-    it('setting a channel-scoped north star auto-creates pin in that channel', () => {
-      (ctx.router as any).clients.add(ctx.mockWs);
-
-      (ctx.router as any).handleNorthStarSet('test-channel', 'Ship v1.0 by Friday');
-
-      const db = getDb();
-      const pins = db.prepare("SELECT * FROM pins WHERE type = 'north_star' AND channel_id = 'test-channel'").all() as any[];
-      expect(pins).toHaveLength(1);
-      expect(pins[0].content).toBe('Ship v1.0 by Friday');
-    });
-
-    it('setting a global north star auto-creates pins in all channels', () => {
-      (ctx.router as any).clients.add(ctx.mockWs);
-
-      (ctx.router as any).handleNorthStarSet('global', 'Global mission statement');
-
-      const db = getDb();
-      const pins = db.prepare("SELECT * FROM pins WHERE type = 'north_star'").all() as any[];
-      // Should create a pin in each channel
-      const channelCount = (db.prepare('SELECT COUNT(*) as cnt FROM channels').get() as any).cnt;
-      expect(pins).toHaveLength(channelCount);
-    });
-
-    it('updating a north star updates existing pins', () => {
-      (ctx.router as any).clients.add(ctx.mockWs);
-
-      (ctx.router as any).handleNorthStarSet('test-channel', 'v1 goal');
-      (ctx.router as any).handleNorthStarSet('test-channel', 'v2 goal updated');
-
-      const db = getDb();
-      const pins = db.prepare("SELECT * FROM pins WHERE type = 'north_star' AND channel_id = 'test-channel'").all() as any[];
-      expect(pins).toHaveLength(1);
-      expect(pins[0].content).toBe('v2 goal updated');
-    });
-  });
-
   // ------- Agent management -------
   describe('Agent management', () => {
     it('registers a new agent', () => {
@@ -416,7 +378,6 @@ describe('router.ts - Core business logic', () => {
 
       // Seed related data for test-channel
       db.prepare("INSERT INTO messages (id, channel_id, sender_id, sender_name, role, content, timestamp, is_urgent) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 0)").run('msg-1', 'test-channel', 'user', 'You', 'user', 'hello');
-      db.prepare("INSERT INTO pins (id, channel_id, type, source_id, content, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))").run('pin-1', 'test-channel', 'custom', 'src', 'pinned');
       db.prepare("INSERT INTO cron_executions (id, channel_id, fired_at, agent_ids, prompt_snippet, status) VALUES (?, ?, datetime('now'), ?, ?, ?)").run('exec-1', 'test-channel', '["agent-1"]', 'snippet', 'sent');
       db.prepare("INSERT INTO north_stars (id, scope, content, updated_at) VALUES (?, ?, ?, datetime('now'))").run('ns-1', 'test-channel', 'goal');
 
@@ -429,7 +390,6 @@ describe('router.ts - Core business logic', () => {
       // Verify cascaded deletes
       expect(db.prepare('SELECT * FROM channel_agents WHERE channel_id = ?').all('test-channel')).toHaveLength(0);
       expect(db.prepare('SELECT * FROM messages WHERE channel_id = ?').all('test-channel')).toHaveLength(0);
-      expect(db.prepare('SELECT * FROM pins WHERE channel_id = ?').all('test-channel')).toHaveLength(0);
       expect(db.prepare('SELECT * FROM cron_executions WHERE channel_id = ?').all('test-channel')).toHaveLength(0);
       expect(db.prepare("SELECT * FROM north_stars WHERE scope = 'test-channel'").all()).toHaveLength(0);
 

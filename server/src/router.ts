@@ -4,7 +4,7 @@ import { getDb } from './db.js';
 import { GatewayConnection } from './gateway.js';
 import { ChannelCronManager } from './cron.js';
 import { getPatrolConfig, setPatrolConfig } from './patrol.js';
-import type { ClientMessage, ServerMessage, Message, Channel, Agent, CronExecution, NorthStar, Pin, PatrolConfig } from './types.js';
+import type { ClientMessage, ServerMessage, Message, Channel, Agent, CronExecution, NorthStar, PatrolConfig } from './types.js';
 
 /**
  * Router — bridges frontend WebSocket clients with a single shared OpenClaw Gateway connection.
@@ -140,18 +140,6 @@ export class Router {
       case 'north_star_set':
         this.handleNorthStarSet(msg.scope, msg.content);
         break;
-      case 'pin_list':
-        this.handlePinList(ws, msg.channelId);
-        break;
-      case 'pin_create':
-        this.handlePinCreate(msg.channelId, msg.content, msg.label);
-        break;
-      case 'pin_message':
-        this.handlePinMessage(msg.channelId, msg.messageId);
-        break;
-      case 'pin_delete':
-        this.handlePinDelete(msg.pinId);
-        break;
       case 'patrol_config_get':
         this.handlePatrolConfigGet(ws);
         break;
@@ -271,7 +259,6 @@ export class Router {
     // Cascade delete related data
     db.prepare('DELETE FROM channel_agents WHERE channel_id = ?').run(channelId);
     db.prepare('DELETE FROM messages WHERE channel_id = ?').run(channelId);
-    db.prepare('DELETE FROM pins WHERE channel_id = ?').run(channelId);
     db.prepare('DELETE FROM cron_executions WHERE channel_id = ?').run(channelId);
     db.prepare('DELETE FROM north_stars WHERE scope = ?').run(channelId);
 
@@ -548,118 +535,10 @@ export class Router {
     }
 
     this.broadcast({ type: 'north_star', star });
-
-    // Pin sync: update all pins referencing this north star
-    this.syncNorthStarPins(star);
-  }
-
-  private handlePinList(ws: WebSocket, channelId: string): void {
-    const db = getDb();
-    const rows = db.prepare('SELECT * FROM pins WHERE channel_id = ? ORDER BY updated_at DESC').all(channelId) as any[];
-    const pins: Pin[] = rows.map(this.mapPinRow);
-    this.sendTo(ws, { type: 'pin_list', channelId, pins });
-  }
-
-  private handlePinCreate(channelId: string, content: string, label?: string): void {
-    const db = getDb();
-    const id = uuid();
-    const now = new Date().toISOString();
-    const sourceId = label || 'custom';
-
-    db.prepare(
-      'INSERT INTO pins (id, channel_id, type, source_id, content, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(id, channelId, 'custom', sourceId, content, now);
-
-    const pin: Pin = { id, channelId, type: 'custom', sourceId, content, updatedAt: now };
-    this.broadcast({ type: 'pin_updated', channelId, pin });
-  }
-
-  private handlePinMessage(channelId: string, messageId: string): void {
-    const db = getDb();
-    const msgRow = db.prepare('SELECT * FROM messages WHERE id = ?').get(messageId) as any;
-    if (!msgRow) return;
-
-    const id = uuid();
-    const now = new Date().toISOString();
-    const content = msgRow.content.length > 200 ? msgRow.content.slice(0, 200) + '...' : msgRow.content;
-
-    db.prepare(
-      'INSERT INTO pins (id, channel_id, type, source_id, content, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(id, channelId, 'message', messageId, content, now);
-
-    const pin: Pin = { id, channelId, type: 'message', sourceId: messageId, content, updatedAt: now };
-    this.broadcast({ type: 'pin_updated', channelId, pin });
-  }
-
-  private handlePinDelete(pinId: string): void {
-    const db = getDb();
-    const row = db.prepare('SELECT * FROM pins WHERE id = ?').get(pinId) as any;
-    if (!row) return;
-
-    const channelId = row.channel_id;
-    db.prepare('DELETE FROM pins WHERE id = ?').run(pinId);
-    this.broadcast({ type: 'pin_deleted', channelId, pinId });
-  }
-
-  /** Pin sync: when a north star changes, update/create pins in relevant channels. */
-  private syncNorthStarPins(star: NorthStar): void {
-    const db = getDb();
-    const now = new Date().toISOString();
-
-    // Find existing pins referencing this north star
-    const existingPins = db.prepare(
-      "SELECT * FROM pins WHERE type = 'north_star' AND source_id = ?"
-    ).all(star.id) as any[];
-
-    for (const pinRow of existingPins) {
-      db.prepare('UPDATE pins SET content = ?, updated_at = ? WHERE id = ?').run(star.content, now, pinRow.id);
-      const pin: Pin = { id: pinRow.id, channelId: pinRow.channel_id, type: 'north_star', sourceId: star.id, content: star.content, updatedAt: now };
-      this.broadcast({ type: 'pin_updated', channelId: pin.channelId, pin });
-    }
-
-    // If scope is a channel ID, auto-create a pin in that channel if none exists
-    if (star.scope !== 'global') {
-      const channelRow = db.prepare('SELECT id FROM channels WHERE id = ?').get(star.scope);
-      if (channelRow) {
-        const existing = db.prepare(
-          "SELECT * FROM pins WHERE channel_id = ? AND type = 'north_star' AND source_id = ?"
-        ).get(star.scope, star.id);
-        if (!existing) {
-          const pinId = uuid();
-          db.prepare('INSERT INTO pins (id, channel_id, type, source_id, content, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-            pinId, star.scope, 'north_star', star.id, star.content, now
-          );
-          const pin: Pin = { id: pinId, channelId: star.scope, type: 'north_star', sourceId: star.id, content: star.content, updatedAt: now };
-          this.broadcast({ type: 'pin_updated', channelId: star.scope, pin });
-        }
-      }
-    }
-
-    // Auto-create pin for global north star in all channels that don't have one
-    if (star.scope === 'global') {
-      const channels = db.prepare('SELECT id FROM channels').all() as { id: string }[];
-      for (const ch of channels) {
-        const existing = db.prepare(
-          "SELECT * FROM pins WHERE channel_id = ? AND type = 'north_star' AND source_id = ?"
-        ).get(ch.id, star.id);
-        if (!existing) {
-          const pinId = uuid();
-          db.prepare('INSERT INTO pins (id, channel_id, type, source_id, content, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-            pinId, ch.id, 'north_star', star.id, star.content, now
-          );
-          const pin: Pin = { id: pinId, channelId: ch.id, type: 'north_star', sourceId: star.id, content: star.content, updatedAt: now };
-          this.broadcast({ type: 'pin_updated', channelId: ch.id, pin });
-        }
-      }
-    }
   }
 
   private mapNorthStarRow(r: any): NorthStar {
     return { id: r.id, scope: r.scope, content: r.content, updatedAt: r.updated_at };
-  }
-
-  private mapPinRow(r: any): Pin {
-    return { id: r.id, channelId: r.channel_id, type: r.type, sourceId: r.source_id, content: r.content, updatedAt: r.updated_at };
   }
 
   // --- Cron handlers ---

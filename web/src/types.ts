@@ -39,17 +39,6 @@ export interface NorthStar {
   updatedAt: string;
 }
 
-export type PinType = 'todo_section' | 'north_star' | 'custom' | 'message';
-
-export interface Pin {
-  id: string;
-  channelId: string;
-  type: PinType;
-  sourceId: string;
-  content: string;
-  updatedAt: string;
-}
-
 export interface Message {
   id: string;
   channelId: string;
@@ -74,9 +63,6 @@ export type ServerMessage =
   | { type: 'cron_history'; channelId: string; executions: CronExecution[] }
   | { type: 'north_star'; star: NorthStar }
   | { type: 'north_star_list'; stars: NorthStar[] }
-  | { type: 'pin_list'; channelId: string; pins: Pin[] }
-  | { type: 'pin_updated'; channelId: string; pin: Pin }
-  | { type: 'pin_deleted'; channelId: string; pinId: string }
   | { type: 'patrol_config'; config: PatrolConfig | null }
   | { type: 'patrol_fired'; controlChannelId: string }
   | { type: 'channel_deleted'; channelId: string }
@@ -97,10 +83,6 @@ export type ClientMessage =
   | { type: 'cron_history'; channelId: string }
   | { type: 'north_star_get'; scope?: string }
   | { type: 'north_star_set'; scope: string; content: string }
-  | { type: 'pin_list'; channelId: string }
-  | { type: 'pin_create'; channelId: string; content: string; label?: string }
-  | { type: 'pin_message'; channelId: string; messageId: string }
-  | { type: 'pin_delete'; pinId: string }
   | { type: 'patrol_config_get' }
   | { type: 'patrol_config_set'; config: Partial<PatrolConfig> }
   | { type: 'patrol_trigger' }
