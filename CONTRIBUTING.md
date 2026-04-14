@@ -59,17 +59,34 @@ QA (Ren) 的职责：
 1. 启动 server + web（`npm run dev:server` + `npm run dev:web`）
 2. 在浏览器里实际操作测试功能
 3. 截图关键页面/交互
-4. 截图贴到 PR comment 里（⚠️ **不要 commit 截图到代码库** — 二进制文件会撑大 git history）
-5. 没有截图 = 没有测试 = 不能 merge
+4. 截图保存到 `docs/qa-screenshots/` 目录（Git LFS 管理）
+5. 截图通过 `gh pr comment` 贴到 PR comment 里（用 raw URL 引用）
+6. 没有截图 = 没有测试 = 不能 merge
 
-截图上传方式（不占 repo 空间）：
-- 用 `gh issue comment` 或 GitHub web UI 上传图片，拿到 `user-images.githubusercontent.com` URL
-- 然后用该 URL 贴到 PR comment 的 markdown 里
+### 截图流程
 
-截图要求：
+```bash
+# 1. 截图（Playwright headless，1280×800，JPEG quality 80）
+node ~/.openclaw/workspace-ren/screenshot.js http://localhost:5173 docs/qa-screenshots/pr<N>-<name>.jpg
+
+# 2. commit 到 PR branch（走 Git LFS，不撑 git history）
+git add docs/qa-screenshots/
+git commit -m "qa: PR #<N> screenshots"
+git push
+
+# 3. 贴 PR comment（用 raw URL）
+gh pr comment <N> --body '![desc](https://github.com/kagura-agent/workshop/blob/<branch>/docs/qa-screenshots/pr<N>-<name>.jpg?raw=true)'
+```
+
+### 截图要求
+- 分辨率：1280×800（不要 4K）
+- 格式：JPEG（quality 80）或 PNG，存 `docs/qa-screenshots/`
+- 命名：`pr<N>-<描述>.jpg`（如 `pr39-home.jpg`）
 - 修复前 vs 修复后（如果是 bug fix）
 - 正常功能截图（如果是新功能）
 - 边界情况截图（如果有）
+
+⚠️ `docs/qa-screenshots/` 已配 `.gitattributes` 走 Git LFS，不会撑大 repo。
 
 ## Dev Environment
 
