@@ -61,23 +61,6 @@ export interface Message {
   isUrgent: boolean;
 }
 
-export interface DirectMessage {
-  id: string;
-  fromId: string;
-  toId: string;
-  content: string;
-  timestamp: string;
-  read: boolean;
-}
-
-export interface DmConversation {
-  partnerId: string;
-  partnerName: string;
-  lastMessage: string;
-  lastTimestamp: string;
-  unreadCount: number;
-}
-
 // Messages from server
 export type ServerMessage =
   | { type: 'message'; channelId: string; message: Message }
@@ -100,10 +83,6 @@ export type ServerMessage =
   | { type: 'agent_registered'; agent: Agent }
   | { type: 'agent_updated'; agent: Agent }
   | { type: 'agent_removed'; id: string }
-  | { type: 'dm_message'; message: DirectMessage }
-  | { type: 'dm_list'; withId: string; messages: DirectMessage[] }
-  | { type: 'dm_conversations'; conversations: DmConversation[] }
-  | { type: 'dm_unread'; counts: Record<string, number> }
   | { type: 'error'; message: string };
 
 // Messages from client → server
@@ -130,11 +109,7 @@ export type ClientMessage =
   | { type: 'rename_channel'; channelId: string; name: string }
   | { type: 'register_agent'; agent: { id: string; name: string; avatar?: string } }
   | { type: 'update_agent'; id: string; updates: Partial<{ name: string; avatar: string }> }
-  | { type: 'remove_agent'; id: string }
-  | { type: 'send_dm'; toId: string; content: string }
-  | { type: 'list_dms'; withId: string; limit?: number; before?: string }
-  | { type: 'dm_mark_read'; withId: string }
-  | { type: 'dm_conversations' };
+  | { type: 'remove_agent'; id: string };
 
 export interface CreateChannelDialogProps {
   agents: Agent[];
