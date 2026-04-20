@@ -2,16 +2,12 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import type { Channel, ChannelType, PatrolConfig } from '../types';
+import type { Channel, ChannelType } from '../types';
 
 interface ChannelSettingsPanelProps {
   channel: Channel;
-  patrolConfig: PatrolConfig | null;
-  channels: Channel[];
   onClose: () => void;
   onSave: (metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'cronSchedule' | 'cronEnabled'>>) => void;
-  onPatrolConfigSave?: (config: Partial<PatrolConfig>) => void;
   onDeleteChannel?: (channelId: string) => void;
   onArchiveChannel?: (channelId: string) => void;
   onRenameChannel?: (channelId: string, name: string) => void;
@@ -23,19 +19,13 @@ const CHANNEL_TYPES: { value: ChannelType; label: string }[] = [
   { value: 'meta', label: 'Meta' },
 ];
 
-export function ChannelSettingsPanel({ channel, patrolConfig, channels, onClose, onSave, onPatrolConfigSave, onDeleteChannel, onArchiveChannel, onRenameChannel }: ChannelSettingsPanelProps) {
+export function ChannelSettingsPanel({ channel, onClose, onSave, onDeleteChannel, onArchiveChannel, onRenameChannel }: ChannelSettingsPanelProps) {
   const [type, setType] = useState<ChannelType>(channel.type);
   const [positioning, setPositioning] = useState(channel.positioning);
   const [guidelines, setGuidelines] = useState(channel.guidelines);
   const [renameName, setRenameName] = useState(channel.name);
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
-  // Patrol state
-  const [patrolSchedule, setPatrolSchedule] = useState(patrolConfig?.schedule ?? '0 */3 * * *');
-  const [patrolEnabled, setPatrolEnabled] = useState(patrolConfig?.enabled ?? false);
-  const [patrolFilter, setPatrolFilter] = useState<string[]>(patrolConfig?.channelFilter ?? []);
-  const isControlChannel = patrolConfig?.controlChannelId === channel.id;
 
   const handleSave = () => {
     onSave({
@@ -97,71 +87,6 @@ export function ChannelSettingsPanel({ channel, patrolConfig, channels, onClose,
               className="w-full py-2 px-3 rounded-md bg-muted text-foreground text-sm border border-border resize-none min-h-[80px] placeholder:text-muted-foreground/60 outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
-
-          {/* Patrol settings — show for meta channels or current control channel */}
-          {(channel.type === 'meta' || isControlChannel) && (
-            <div className="space-y-3 pt-3 border-t border-border">
-              <Label className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-                <span>&#128737;</span> Patrol Settings
-              </Label>
-
-              <div className="space-y-2">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Patrol Schedule</Label>
-                  <Input
-                    value={patrolSchedule}
-                    onChange={(e) => setPatrolSchedule(e.target.value)}
-                    placeholder="e.g. 0 */3 * * *"
-                    className="bg-muted text-sm"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs text-muted-foreground">Patrol Enabled</Label>
-                  <Switch checked={patrolEnabled} onCheckedChange={setPatrolEnabled} />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Channel Filter (empty = all)</Label>
-                  <div className="space-y-1 max-h-[100px] overflow-y-auto">
-                    {channels.filter(c => c.id !== channel.id).map((c) => (
-                      <label key={c.id} className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={patrolFilter.includes(c.id)}
-                          onChange={(e) => {
-                            setPatrolFilter(prev =>
-                              e.target.checked
-                                ? [...prev, c.id]
-                                : prev.filter(id => id !== c.id)
-                            );
-                          }}
-                          className="rounded"
-                        />
-                        #{c.name}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs w-full"
-                  onClick={() => {
-                    onPatrolConfigSave?.({
-                      controlChannelId: channel.id,
-                      schedule: patrolSchedule,
-                      enabled: patrolEnabled,
-                      channelFilter: patrolFilter,
-                    });
-                  }}
-                >
-                  Save Patrol Config
-                </Button>
-              </div>
-            </div>
-          )}
 
           {/* Channel Management */}
           <div className="space-y-3 pt-3 border-t border-border">

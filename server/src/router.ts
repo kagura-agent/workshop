@@ -3,8 +3,7 @@ import type WebSocket from 'ws';
 import { getDb } from './db.js';
 import { GatewayConnection } from './gateway.js';
 import { ChannelCronManager } from './cron.js';
-import { getPatrolConfig, setPatrolConfig } from './patrol.js';
-import type { ClientMessage, ServerMessage, Message, Channel, Agent, PatrolConfig } from './types.js';
+import type { ClientMessage, ServerMessage, Message, Channel, Agent } from './types.js';
 
 /**
  * Router — bridges frontend WebSocket clients with a single shared OpenClaw Gateway connection.
@@ -25,8 +24,6 @@ export class Router {
 
     // Send message history for all active channels
     this.sendAllChannelHistory(ws);
-    this.handlePatrolConfigGet(ws);
-
     ws.on('message', (raw) => {
       try {
         const msg: ClientMessage = JSON.parse(raw.toString());
@@ -126,15 +123,6 @@ export class Router {
         break;
       case 'update_channel_meta':
         this.handleUpdateChannelMeta(msg.channelId, msg.metadata);
-        break;
-      case 'patrol_config_get':
-        this.handlePatrolConfigGet(ws);
-        break;
-      case 'patrol_config_set':
-        this.handlePatrolConfigSet(msg.config);
-        break;
-      case 'patrol_trigger':
-        this.handlePatrolTrigger();
         break;
       case 'register_agent':
         this.handleRegisterAgent(ws, msg.agent);
@@ -520,32 +508,6 @@ export class Router {
     ).run(id, channelId, senderId, senderName, role, content, timestamp, isUrgent ? 1 : 0);
 
     return { id, channelId, senderId, senderName, role, content, timestamp, isUrgent };
-  }
-
-  // --- Patrol handlers ---
-
-  private handlePatrolConfigGet(ws: WebSocket): void {
-    const config = getPatrolConfig();
-    this.sendTo(ws, { type: 'patrol_config', config });
-  }
-
-  private handlePatrolConfigSet(updates: Partial<PatrolConfig>): void {
-    const config = setPatrolConfig(updates);
-    this.broadcast({ type: 'patrol_config', config });
-
-    if (this.cronManager) {
-      this.cronManager.syncPatrol(config);
-    }
-  }
-
-  private handlePatrolTrigger(): void {
-    if (!this.cronManager) return;
-    this.cronManager.executePatrol();
-
-    const config = getPatrolConfig();
-    if (config) {
-      this.broadcast({ type: 'patrol_fired', controlChannelId: config.controlChannelId });
-    }
   }
 
   // --- Runtime agent management ---

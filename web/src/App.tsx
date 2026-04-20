@@ -5,7 +5,7 @@ import { AgentList } from './components/AgentList';
 import { CreateChannelDialog } from './components/CreateChannelDialog';
 import { ChannelSettingsPanel } from './components/ChannelSettingsPanel';
 import { useWebSocket } from './hooks/useWebSocket';
-import type { Channel, Agent, Message, ServerMessage, PatrolConfig } from './types';
+import type { Channel, Agent, Message, ServerMessage } from './types';
 
 const WS_URL = `ws://${window.location.hostname}:3100`;
 
@@ -17,7 +17,6 @@ export default function App() {
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [editingChannel, setEditingChannel] = useState<boolean>(false);
   const [showChannelSettings, setShowChannelSettings] = useState(false);
-  const [patrolConfig, setPatrolConfigState] = useState<PatrolConfig | null>(null);
 
   const handleMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
@@ -69,12 +68,6 @@ export default function App() {
         setChannels((prev) => prev.filter((c) => c.id !== msg.channelId));
         setActiveChannelId((prev) => prev === msg.channelId ? null : prev);
         break;
-      case 'patrol_config':
-        setPatrolConfigState(msg.config);
-        break;
-      case 'patrol_fired':
-        console.log('[patrol] fired for', msg.controlChannelId);
-        break;
       case 'agent_registered':
         setAgents((prev) => [...prev, msg.agent]);
         break;
@@ -107,14 +100,6 @@ export default function App() {
 
   const handleUpdateChannelMeta = (channelId: string, metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'cronSchedule' | 'cronEnabled'>>) => {
     send({ type: 'update_channel_meta', channelId, metadata });
-  };
-
-  const handlePatrolConfigSet = (config: Partial<PatrolConfig>) => {
-    send({ type: 'patrol_config_set', config });
-  };
-
-  const handlePatrolTrigger = () => {
-    send({ type: 'patrol_trigger' });
   };
 
   const handleRegisterAgent = (agent: { id: string; name: string; avatar?: string }) => {
@@ -164,7 +149,6 @@ export default function App() {
         channels={channels}
         agents={agents}
         activeChannelId={activeChannelId}
-        patrolControlChannelId={patrolConfig?.controlChannelId ?? null}
         onSelectChannel={selectChannel}
         onCreateChannel={handleCreateChannel}
         onOpenSettings={(channelId) => { selectChannel(channelId); setShowChannelSettings(true); }}
@@ -174,11 +158,9 @@ export default function App() {
           messages={activeChannelId ? (messages[activeChannelId] || []) : []}
           channelAgents={channelAgents}
           typingNames={typingNames}
-          isPatrolChannel={patrolConfig?.controlChannelId === activeChannelId}
           onSendMessage={handleSendMessage}
           onEditChannel={activeChannel ? handleEditChannel : undefined}
           onOpenSettings={activeChannel ? () => setShowChannelSettings(true) : undefined}
-          onPatrolTrigger={handlePatrolTrigger}
         />
       <AgentList
         agents={agents}
@@ -204,14 +186,11 @@ export default function App() {
       {showChannelSettings && activeChannel && (
         <ChannelSettingsPanel
           channel={activeChannel}
-          patrolConfig={patrolConfig}
-          channels={channels}
           onClose={() => setShowChannelSettings(false)}
           onSave={(metadata) => {
             handleUpdateChannelMeta(activeChannel.id, metadata);
             setShowChannelSettings(false);
           }}
-          onPatrolConfigSave={handlePatrolConfigSet}
           onDeleteChannel={handleDeleteChannel}
           onArchiveChannel={handleArchiveChannel}
           onRenameChannel={handleRenameChannel}
