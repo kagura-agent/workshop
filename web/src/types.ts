@@ -58,10 +58,7 @@ export type ClientMessage =
   | { type: 'list_agents' }
   | { type: 'delete_channel'; channelId: string }
   | { type: 'archive_channel'; channelId: string }
-  | { type: 'rename_channel'; channelId: string; name: string }
-  | { type: 'register_agent'; agent: { id: string; name: string; avatar?: string } }
-  | { type: 'update_agent'; id: string; updates: Partial<{ name: string; avatar: string }> }
-  | { type: 'remove_agent'; id: string };
+  | { type: 'rename_channel'; channelId: string; name: string };
 
 export interface CreateChannelDialogProps {
   agents: Agent[];

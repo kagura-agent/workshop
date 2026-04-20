@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
-import { AgentList } from './components/AgentList';
 import { CreateChannelDialog } from './components/CreateChannelDialog';
 import { ChannelSettingsPanel } from './components/ChannelSettingsPanel';
 import { useWebSocket } from './hooks/useWebSocket';
@@ -102,18 +101,6 @@ export default function App() {
     send({ type: 'update_channel_meta', channelId, metadata });
   };
 
-  const handleRegisterAgent = (agent: { id: string; name: string; avatar?: string }) => {
-    send({ type: 'register_agent', agent });
-  };
-
-  const handleUpdateAgent = (id: string, updates: Partial<{ name: string; avatar: string }>) => {
-    send({ type: 'update_agent', id, updates });
-  };
-
-  const handleRemoveAgent = (id: string) => {
-    send({ type: 'remove_agent', id });
-  };
-
   const handleDeleteChannel = (channelId: string) => {
     send({ type: 'delete_channel', channelId });
   };
@@ -162,12 +149,6 @@ export default function App() {
           onEditChannel={activeChannel ? handleEditChannel : undefined}
           onOpenSettings={activeChannel ? () => setShowChannelSettings(true) : undefined}
         />
-      <AgentList
-        agents={agents}
-        onRegisterAgent={handleRegisterAgent}
-        onUpdateAgent={handleUpdateAgent}
-        onRemoveAgent={handleRemoveAgent}
-      />
       {editingChannel && activeChannel && (
         <CreateChannelDialog
           agents={agents}
