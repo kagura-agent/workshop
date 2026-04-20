@@ -124,15 +124,6 @@ export class Router {
       case 'update_channel_meta':
         this.handleUpdateChannelMeta(msg.channelId, msg.metadata);
         break;
-      case 'register_agent':
-        this.handleRegisterAgent(ws, msg.agent);
-        break;
-      case 'update_agent':
-        this.handleUpdateAgent(ws, msg.id, msg.updates);
-        break;
-      case 'remove_agent':
-        this.handleRemoveAgent(ws, msg.id);
-        break;
       case 'delete_channel':
         this.handleDeleteChannel(msg.channelId);
         break;
@@ -510,109 +501,6 @@ export class Router {
     return { id, channelId, senderId, senderName, role, content, timestamp, isUrgent };
   }
 
-  // --- Runtime agent management ---
-
-  private handleRegisterAgent(ws: WebSocket, agentData: { id: string; name: string; avatar?: string }): void {
-    const db = getDb();
-
-    // Validate unique ID
-    const existing = db.prepare('SELECT id FROM agents WHERE id = ?').get(agentData.id);
-    if (existing || this.agents.has(agentData.id)) {
-      this.sendTo(ws, { type: 'error', message: `Agent with id '${agentData.id}' already exists` });
-      return;
-    }
-
-    const agent: Agent = {
-      id: agentData.id,
-      name: agentData.name,
-      avatar: agentData.avatar,
-      status: 'offline',
-    };
-
-    db.prepare('INSERT INTO agents (id, name, avatar, status) VALUES (?, ?, ?, ?)').run(
-      agent.id, agent.name, agent.avatar ?? null, agent.status,
-    );
-    this.agents.set(agent.id, agent);
-
-    this.broadcast({ type: 'agent_registered', agent });
-  }
-
-  private handleUpdateAgent(ws: WebSocket, id: string, updates: Partial<{ name: string; avatar: string }>): void {
-    const db = getDb();
-
-    const agent = this.agents.get(id);
-    if (!agent) {
-      this.sendTo(ws, { type: 'error', message: `Agent '${id}' not found` });
-      return;
-    }
-
-    const sqlUpdates: string[] = [];
-    const values: any[] = [];
-
-    if (updates.name !== undefined) {
-      agent.name = updates.name;
-      sqlUpdates.push('name = ?');
-      values.push(updates.name);
-    }
-    if (updates.avatar !== undefined) {
-      agent.avatar = updates.avatar;
-      sqlUpdates.push('avatar = ?');
-      values.push(updates.avatar);
-    }
-
-    if (sqlUpdates.length === 0) return;
-
-    values.push(id);
-    db.prepare(`UPDATE agents SET ${sqlUpdates.join(', ')} WHERE id = ?`).run(...values);
-
-    this.broadcast({ type: 'agent_updated', agent });
-  }
-
-  private handleRemoveAgent(ws: WebSocket, id: string): void {
-    const db = getDb();
-
-    const agent = this.agents.get(id);
-    if (!agent) {
-      this.sendTo(ws, { type: 'error', message: `Agent '${id}' not found` });
-      return;
-    }
-
-    // Find channels that will be affected by the removal
-    const affectedChannels = db.prepare(
-      'SELECT DISTINCT channel_id FROM channel_agents WHERE agent_id = ?'
-    ).all(id) as { channel_id: string }[];
-
-    // Cascade: remove from channel_agents
-    db.prepare('DELETE FROM channel_agents WHERE agent_id = ?').run(id);
-
-    // Remove the agent itself
-    db.prepare('DELETE FROM agents WHERE id = ?').run(id);
-    this.agents.delete(id);
-
-    this.broadcast({ type: 'agent_removed', id });
-
-    // Broadcast channel_updated for each affected channel so UIs refresh membership
-    for (const { channel_id } of affectedChannels) {
-      const row = db.prepare('SELECT * FROM channels WHERE id = ?').get(channel_id) as any;
-      if (!row) continue;
-
-      const agents = db.prepare(
-        'SELECT agent_id, require_mention FROM channel_agents WHERE channel_id = ?'
-      ).all(channel_id) as { agent_id: string; require_mention: number }[];
-
-      const channel: Channel = {
-        id: row.id, name: row.name,
-        agents: agents.map(a => a.agent_id),
-        agentConfigs: agents.map(a => ({ id: a.agent_id, requireMention: !!a.require_mention })),
-        createdAt: row.created_at, status: row.status,
-        type: row.type ?? 'project', positioning: row.positioning ?? '',
-        guidelines: row.guidelines ?? '',
-        cronSchedule: row.cron_schedule ?? null,
-        cronEnabled: !!row.cron_enabled,
-      };
-      this.broadcast({ type: 'channel_updated', channel });
-    }
-  }
 
   private broadcast(msg: ServerMessage): void {
     const data = JSON.stringify(msg);
