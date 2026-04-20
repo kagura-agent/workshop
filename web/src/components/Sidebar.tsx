@@ -12,10 +12,9 @@ interface SidebarProps {
   onSelectChannel: (channelId: string) => void;
   onCreateChannel: (name: string, agents: { id: string; requireMention: boolean }[]) => void;
   onOpenSettings: (channelId: string) => void;
-  onOpenCronDashboard: () => void;
 }
 
-export function Sidebar({ channels, agents, activeChannelId, patrolControlChannelId, onSelectChannel, onCreateChannel, onOpenSettings, onOpenCronDashboard }: SidebarProps) {
+export function Sidebar({ channels, agents, activeChannelId, patrolControlChannelId, onSelectChannel, onCreateChannel, onOpenSettings }: SidebarProps) {
   const [showDialog, setShowDialog] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
 
@@ -26,13 +25,6 @@ export function Sidebar({ channels, agents, activeChannelId, patrolControlChanne
     <div className="w-60 bg-card border-r border-border flex flex-col">
       <div className="p-3 px-4 font-semibold text-sm border-b border-border flex items-center justify-between">
         <span>Workshop</span>
-        <button
-          className="inline-flex items-center justify-center w-6 h-6 rounded text-muted-foreground hover:bg-accent hover:text-foreground text-sm leading-none cursor-pointer"
-          onClick={onOpenCronDashboard}
-          title="Cron Dashboard"
-        >
-          &#128339;
-        </button>
       </div>
       <ScrollArea className="flex-1">
         <div className="p-2">
