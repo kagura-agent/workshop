@@ -15,14 +15,12 @@ interface ChatViewProps {
   messages: Message[];
   channelAgents: Agent[];
   typingNames: string[];
-  isPatrolChannel: boolean;
   onSendMessage: (content: string) => void;
   onEditChannel?: () => void;
   onOpenSettings?: () => void;
-  onPatrolTrigger?: () => void;
 }
 
-export function ChatView({ channel, messages, channelAgents, typingNames, isPatrolChannel, onSendMessage, onEditChannel, onOpenSettings, onPatrolTrigger }: ChatViewProps) {
+export function ChatView({ channel, messages, channelAgents, typingNames, onSendMessage, onEditChannel, onOpenSettings }: ChatViewProps) {
   const [input, setInput] = useState('');
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -147,15 +145,6 @@ export function ChatView({ channel, messages, channelAgents, typingNames, isPatr
             </span>
           )}
           <div className="ml-auto flex items-center gap-1">
-            {isPatrolChannel && onPatrolTrigger && (
-              <button
-                className="cursor-pointer text-yellow-400 hover:text-yellow-300 text-sm px-1.5"
-                onClick={onPatrolTrigger}
-                title="Run patrol now"
-              >
-                &#128737;
-              </button>
-            )}
             {onOpenSettings && (
               <button
                 className="cursor-pointer text-muted-foreground hover:text-foreground"

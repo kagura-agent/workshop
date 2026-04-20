@@ -22,7 +22,6 @@ describe('db.ts - Schema initialization', () => {
     expect(names).toContain('channel_agents');
     expect(names).toContain('messages');
     expect(names).toContain('cron_executions');
-    expect(names).toContain('patrol_config');
   });
 
   it('channels table has v0.3 migration columns', () => {

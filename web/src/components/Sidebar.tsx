@@ -8,13 +8,12 @@ interface SidebarProps {
   channels: Channel[];
   agents: Agent[];
   activeChannelId: string | null;
-  patrolControlChannelId: string | null;
   onSelectChannel: (channelId: string) => void;
   onCreateChannel: (name: string, agents: { id: string; requireMention: boolean }[]) => void;
   onOpenSettings: (channelId: string) => void;
 }
 
-export function Sidebar({ channels, agents, activeChannelId, patrolControlChannelId, onSelectChannel, onCreateChannel, onOpenSettings }: SidebarProps) {
+export function Sidebar({ channels, agents, activeChannelId, onSelectChannel, onCreateChannel, onOpenSettings }: SidebarProps) {
   const [showDialog, setShowDialog] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
 
@@ -52,9 +51,6 @@ export function Sidebar({ channels, agents, activeChannelId, patrolControlChanne
               onClick={() => onSelectChannel(channel.id)}
             >
               <span className="flex-1 truncate">{channel.name}</span>
-              {channel.id === patrolControlChannelId && (
-                <span className="shrink-0 text-yellow-400/80 text-[11px]" title="Patrol control channel">&#128737;</span>
-              )}
               {channel.cronEnabled && (
                 <span className="shrink-0 text-muted-foreground/60 text-[11px]" title="Cron enabled">&#128339;</span>
               )}

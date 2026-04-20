@@ -42,8 +42,6 @@ export type ServerMessage =
   | { type: 'channel_created'; channel: Channel }
   | { type: 'channel_updated'; channel: Channel }
   | { type: 'channel_meta_updated'; channel: Channel }
-  | { type: 'patrol_config'; config: PatrolConfig | null }
-  | { type: 'patrol_fired'; controlChannelId: string }
   | { type: 'channel_deleted'; channelId: string }
   | { type: 'agent_registered'; agent: Agent }
   | { type: 'agent_updated'; agent: Agent }
@@ -58,9 +56,6 @@ export type ClientMessage =
   | { type: 'update_channel_meta'; channelId: string; metadata: Partial<Pick<Channel, 'type' | 'positioning' | 'guidelines' | 'cronSchedule' | 'cronEnabled'>> }
   | { type: 'list_channels' }
   | { type: 'list_agents' }
-  | { type: 'patrol_config_get' }
-  | { type: 'patrol_config_set'; config: Partial<PatrolConfig> }
-  | { type: 'patrol_trigger' }
   | { type: 'delete_channel'; channelId: string }
   | { type: 'archive_channel'; channelId: string }
   | { type: 'rename_channel'; channelId: string; name: string }
@@ -78,12 +73,3 @@ export interface CreateChannelDialogProps {
     agents: { id: string; requireMention: boolean }[];
   };
 }
-
-export interface PatrolConfig {
-  controlChannelId: string;
-  schedule: string;
-  enabled: boolean;
-  lastPatrolAt: string | null;
-  channelFilter: string[];
-}
-
