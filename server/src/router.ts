@@ -470,19 +470,17 @@ export class Router {
         'SELECT * FROM messages WHERE channel_id = ? ORDER BY timestamp ASC LIMIT 200'
       ).all(channelId) as any[];
 
-      for (const r of rows) {
-        const msg: Message = {
-          id: r.id,
-          channelId: r.channel_id,
-          senderId: r.sender_id,
-          senderName: r.sender_name,
-          role: r.role,
-          content: r.content,
-          timestamp: r.timestamp,
-          isUrgent: !!r.is_urgent,
-        };
-        this.sendTo(ws, { type: 'message', channelId, message: msg });
-      }
+      const msgs: Message[] = rows.map((r) => ({
+        id: r.id,
+        channelId: r.channel_id,
+        senderId: r.sender_id,
+        senderName: r.sender_name,
+        role: r.role,
+        content: r.content,
+        timestamp: r.timestamp,
+        isUrgent: !!r.is_urgent,
+      }));
+      this.sendTo(ws, { type: 'channel_history', channelId, messages: msgs });
     }
   }
 

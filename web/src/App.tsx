@@ -40,11 +40,15 @@ export default function App() {
           });
         }, 30000);
         break;
+      case 'channel_history':
+        setMessages((prev) => ({ ...prev, [msg.channelId]: msg.messages }));
+        break;
       case 'message':
-        setMessages((prev) => ({
-          ...prev,
-          [msg.channelId]: [...(prev[msg.channelId] || []), msg.message],
-        }));
+        setMessages((prev) => {
+          const existing = prev[msg.channelId] || [];
+          if (existing.some((m) => m.id === msg.message.id)) return prev;
+          return { ...prev, [msg.channelId]: [...existing, msg.message] };
+        });
         // Clear typing for this agent when their message arrives
         if (msg.message.role === 'assistant') {
           setTyping((prev) => {
