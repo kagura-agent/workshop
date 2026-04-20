@@ -36,6 +36,7 @@ export interface Message {
 // Messages from server
 export type ServerMessage =
   | { type: 'message'; channelId: string; message: Message }
+  | { type: 'channel_history'; channelId: string; messages: Message[] }
   | { type: 'typing'; channelId: string; agentId: string; agentName: string }
   | { type: 'channel_list'; channels: Channel[] }
   | { type: 'agent_list'; agents: Agent[] }
